@@ -1,0 +1,21 @@
+# ── Virtual environment & caches ─────────────────────────────────
+.venv/
+__pycache__/
+*.py[cod]
+
+# ── Secrets & personal data — NEVER commit ───────────────────────
+# API keys live only on your machine. Clones configure their own on
+# first run via the in-app setup screen.
+config/api_keys.json
+**/api_keys.json
+memory/long_term.json
+
+# ── Local-only artifacts ─────────────────────────────────────────
+Jarvis Intallation/
+*.zip
+CLAUDE.md
+.claude/
+
+# ── Scratch / temporary test files ───────────────────────────────
+_*.py
+_*.png
