@@ -4,115 +4,115 @@
 
 ### *Just A Rather Very Intelligent System*
 
-**A real-time, hands-free voice assistant for Windows that actually controls your computer.**
-Speak naturally — it understands you, picks the right tool, does the task on your real desktop, and replies out loud.
+**Windows uchun real vaqtda, qo‘lsiz ishlaydigan, kompyuteringizni chinakam boshqaradigan ovozli sun’iy intellekt yordamchisi.**
+Tabiiy gapiring — u sizni tushunadi, kerakli vositani tanlaydi, vazifani haqiqiy ish stolingizda bajaradi va ovoz bilan javob beradi.
 
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
-![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6)
-![Voice](https://img.shields.io/badge/Voice-Uzbek%20%C2%B7%20EN%20%C2%B7%20RU-00d4ff)
-![Interface](https://img.shields.io/badge/UI-PyQt6%20HUD-ff6b00)
+![Platforma](https://img.shields.io/badge/Platforma-Windows%2010%2F11-0078D6)
+![Ovoz](https://img.shields.io/badge/Ovoz-O'zbek%20%C2%B7%20EN%20%C2%B7%20RU-00d4ff)
+![Interfeys](https://img.shields.io/badge/Interfeys-PyQt6%20HUD-ff6b00)
 
 </div>
 
 ---
 
-## ✨ Overview
+## ✨ Umumiy ma’lumot
 
-JARVIS is a **wake-word voice assistant** with a sci-fi HUD. You say **“Jarvis …”**, and it:
+JARVIS — bu kelajak uslubidagi HUD interfeysiga ega **faollashtiruvchi so‘zli ovozli yordamchi**. Siz **“Jarvis …”** deysiz, u esa:
 
-- 🎙️ **Listens** (cloud or offline speech-to-text)
-- 🧠 **Thinks** with an LLM that can **call tools** (OpenAI, or a local model)
-- ⚙️ **Acts** on your real machine — opens apps, drives your browser, draws trading charts, sends & reads messages, takes screenshots…
-- 🔊 **Replies out loud** in natural speech
-- ❓ **Asks back** when it needs more (“opened Telegram — who do you want to text?”)
+- 🎙️ **Tinglaydi** (bulutli yoki oflayn nutqni matnga aylantirish)
+- 🧠 **O‘ylaydi** — vositalarni chaqira oladigan til modeli bilan (OpenAI yoki lokal model)
+- ⚙️ **Bajaradi** — haqiqiy kompyuteringizda: ilovalarni ochadi, brauzerni boshqaradi, trading grafiklarini chizadi, xabar yuboradi va o‘qiydi, skrinshot oladi…
+- 🔊 **Ovoz bilan javob beradi** — tabiiy nutqda
+- ❓ **Qayta savol beradi** — kerak bo‘lganda (“Telegram ochildi — kimga yozay?”)
 
-It runs **online with API keys** (recommended) **or fully offline** with local models — your choice on the first-run setup screen.
+U **API kalitlari bilan onlayn** (tavsiya etiladi) **yoki lokal modellar bilan to‘liq oflayn** ishlaydi — birinchi ishga tushirishda o‘zingiz tanlaysiz.
 
-> 🔐 **Your API keys are never committed.** This repo ships the code only; you add your own keys once, locally, through the setup screen.
+> 🔐 **API kalitlaringiz hech qachon yuklanmaydi.** Bu repozitoriy faqat kodni o‘z ichiga oladi; kalitlarni bir marta, mahalliy ravishda, sozlash oynasi orqali kiritasiz.
 
 ---
 
-## 🧠 How the task system works
+## 🧠 Vazifa tizimi qanday ishlaydi
 
-Every spoken request flows through one **turn loop**:
+Har bir aytilgan buyruq bitta **navbat tsikli** (turn loop) orqali o‘tadi:
 
 ```mermaid
 flowchart TD
-    A["🎙️ Microphone<br/>(or ⌨️ text box)"] --> B{"Wake word<br/>'Jarvis …' ?"}
-    B -- no --> A
-    B -- yes --> C["🗣️ Speech-to-Text<br/>ElevenLabs / Whisper"]
-    C --> D["🧠 LLM with tool-calling<br/>OpenAI / Ollama<br/>+ memory + system prompt"]
-    D --> E{"Needs a tool?"}
-    E -- "no" --> H["💬 Compose reply"]
-    E -- "yes" --> F["⚙️ Execute tool(s)<br/>open app · browser · charts<br/>messages · screenshot · files …"]
-    F --> G["🌐 Localize result<br/>+ ask-back if needed"]
+    A["🎙️ Mikrofon<br/>(yoki ⌨️ matn maydoni)"] --> B{"Faollashtiruvchi so'z<br/>'Jarvis …' ?"}
+    B -- "yo'q" --> A
+    B -- "ha" --> C["🗣️ Nutqdan matnga<br/>ElevenLabs / Whisper"]
+    C --> D["🧠 Til modeli + vosita chaqirish<br/>OpenAI / Ollama<br/>+ xotira + tizim prompti"]
+    D --> E{"Vosita kerakmi?"}
+    E -- "yo'q" --> H["💬 Javob tuzish"]
+    E -- "ha" --> F["⚙️ Vosita(lar)ni bajarish<br/>ilova ochish · brauzer · grafiklar<br/>xabarlar · skrinshot · fayllar …"]
+    F --> G["🌐 Natijani o'zbekchaga o'girish<br/>+ kerak bo'lsa qayta savol"]
     G --> H
-    H --> I["🔊 Text-to-Speech<br/>Muxlisa / EdgeTTS"]
-    I --> J["🔈 Speaker"]
-    F -. "tool result fed back · up to 6 rounds" .-> D
+    H --> I["🔊 Matndan nutqqa<br/>Muxlisa / EdgeTTS"]
+    I --> J["🔈 Karnay"]
+    F -. "natija qaytariladi · 6 martagacha" .-> D
 ```
 
-### Step by step — “*Jarvis, open Telegram and text Ali ‘hi’*”
+### Bosqichma-bosqich — “*Jarvis, Telegram’ni och va Ali’ga ‘salom’ deb yoz*”
 
-| # | Stage | What happens |
-|---|-------|--------------|
-| 1 | **Wake word** | The mic ignores everything until it hears **“Jarvis …”** (so background talk never triggers it). |
-| 2 | **Transcribe** | Speech → text via the configured STT engine. |
-| 3 | **Decide** | The LLM reads the request + conversation history + memory, and chooses tools: `open_app(Telegram)` → `send_message(Ali, "hi")`. |
-| 4 | **Execute** | Each tool runs on the desktop and returns a result string. Already-open apps are **re-used, not reopened**. |
-| 5 | **Localize & ask back** | The result becomes a short natural reply; if something is missing it asks one follow-up (“who should I text?”) and opens a **15-second answer window** so you reply *without* the wake word. |
-| 6 | **Speak** | The reply is streamed to TTS sentence-by-sentence, so it starts talking before it has finished thinking. |
+| # | Bosqich | Nima yuz beradi |
+|---|---------|-----------------|
+| 1 | **Faollashtiruvchi so‘z** | Mikrofon **“Jarvis …”** eshitilmaguncha hammasini e’tiborsiz qoldiradi (shuning uchun atrofdagi gap-so‘z uni ishga tushirmaydi). |
+| 2 | **Transkripsiya** | Nutq → matn, tanlangan STT dvigateli orqali. |
+| 3 | **Qaror** | Til modeli buyruq + suhbat tarixi + xotirani o‘qib, vositalarni tanlaydi: `open_app(Telegram)` → `send_message(Ali, "salom")`. |
+| 4 | **Bajarish** | Har bir vosita ish stolida ishlaydi va natija qaytaradi. Allaqachon ochiq ilovalar **qayta ochilmaydi**, mavjudi ishlatiladi. |
+| 5 | **O‘girish va qayta savol** | Natija qisqa tabiiy javobga aylanadi; biror narsa yetishmasa, bitta savol beradi (“kimga yozay?”) va **15 soniyalik javob oynasi** ochiladi — javobni *faollashtiruvchi so‘zsiz* aytasiz. |
+| 6 | **Gapirish** | Javob TTS dvigateliga gap-gap uzatiladi, shuning uchun o‘ylab bo‘lishidan oldinroq gapira boshlaydi. |
 
-### The tool system
+### Vosita tizimi
 
-The LLM is given a catalogue of **tools** (functions). For each request it:
+Til modeliga **vositalar** (funksiyalar) katalogi beriladi. Har bir buyruq uchun u:
 
-1. Picks the right tool(s) and fills their parameters,
-2. Runs them via `JarvisLocal._execute_tool()`,
-3. Feeds the result back for the next step — **multi-step tasks chain up to 6 tool rounds** in one turn.
+1. Kerakli vosita(lar)ni tanlaydi va parametrlarini to‘ldiradi,
+2. Ularni `JarvisLocal._execute_tool()` orqali ishga tushiradi,
+3. Natijani keyingi qadam uchun qaytaradi — **ko‘p bosqichli vazifalar bitta navbatda 6 martagacha vosita aylanasini** bog‘laydi.
 
-Some results (search, screen analysis, charting) get a second LLM pass to summarize; simple confirmations are spoken instantly.
+Ba’zi natijalar (qidiruv, ekran tahlili, grafik chizish) ikkinchi LLM bosqichida umumlashtiriladi; oddiy tasdiqlar esa darhol aytiladi.
 
-### Voice controls
+### Ovozli boshqaruv
 
-| Control | How |
-|---------|-----|
-| 🗣️ **Wake word** | Start any command with **“Jarvis …”** |
-| 🎤 **Push-to-talk** | Hold the **“BOSIB TURIB GAPIR”** button, talk, release — no wake word needed |
-| ⏹️ **Barge-in / stop** | Say **“Jarvis Stop”** (or press **Esc**) to instantly stop talking and listen |
-| 🔇 **Mute / Fullscreen** | **F4** / **F11** |
-
----
-
-## 📋 What it can do
-
-| Category | Say something like… | Result |
-|----------|---------------------|--------|
-| 🚀 **Open apps** | “open Chrome”, “launch Spotify” | Opens any app or website |
-| 🌐 **Browser** | “search X”, “open Instagram” | New tab in your **existing** Chrome (no new window) |
-| 📈 **Trading (TradingView)** | “open the gold chart”, “switch to 15m”, “add RSI”, “draw a trend line” | Opens charts (XAUUSD…), sets timeframe, adds indicators, draws trend / fib / support-resistance |
-| 💬 **Send messages** | “text Ali on Telegram saying hi” | Sends a message — focuses the open app, no reopen |
-| 📥 **Read messages** | “what did Ali say?” | Reads the latest incoming messages out loud |
-| 📸 **Screenshots** | “take a screenshot”, “capture the Chrome screen”, “screenshot monitor 2” | Full-screen capture, **multi-monitor aware**, saved to Pictures |
-| ⏰ **Reminders & alarms** | “remind me at 7”, “set an alarm” | Schedules a timed reminder / alarm |
-| 📝 **Notes & lists** | “note that…”, “add milk to my shopping list” | Quick notes & named lists |
-| 🌦️ **Info** | “weather in Tashkent”, “what time is it”, “search …” | Weather, time/date, web search |
-| ▶️ **YouTube** | “play lo-fi music”, “trending videos” | Plays / lists YouTube videos |
-| 🖥️ **System control** | “volume 50”, “lock screen”, “wifi off”, “pause” | Volume, brightness, wifi, power, media keys |
-| 🖱️ **Automation** | “type …”, “click here”, “scroll down” | Mouse / keyboard / window control |
-| 📂 **Files** | “list my desktop”, “find report.pdf” | File & folder management |
-| 📄 **File AI** | *drop a PDF/CSV/image →* “summarize this” | Processes images, PDFs, CSV, audio, video |
-| 💻 **Coding** | “write a python script that …” | Writes, edits, runs code; builds projects |
-| 🧩 **Multi-step** | “research X and save it to a file” | Autonomous multi-step task planning |
-| 👁️ **Vision** | “what’s on my screen?” | Analyzes the screen with a vision model |
-| 🎮 **Games** | “update my Steam games” | Steam / Epic install & update |
-| 🧠 **Memory** | “my name is Ali”, “I live in Tashkent” | Remembers personal facts across sessions |
+| Boshqaruv | Qanday |
+|-----------|--------|
+| 🗣️ **Faollashtiruvchi so‘z** | Har qanday buyruqni **“Jarvis …”** bilan boshlang |
+| 🎤 **Bosib-gapirish** | **“BOSIB TURIB GAPIR”** tugmasini bosib turib gapiring, qo‘yvoring — faollashtiruvchi so‘z shart emas |
+| ⏹️ **To‘xtatish** | **“Jarvis Stop”** deng (yoki **Esc** bosing) — gapirishni darhol to‘xtatib, tinglaydi |
+| 🔇 **Mute / To‘liq ekran** | **F4** / **F11** |
 
 ---
 
-## 🚀 Getting started
+## 📋 U nimalarni qila oladi
 
-> **Requirements:** Windows 10/11 · [Python 3.12](https://www.python.org/downloads/) (tick *“Add Python to PATH”*) · internet · a microphone
+| Toifa | Shunday deysiz… | Natija |
+|-------|-----------------|--------|
+| 🚀 **Ilova ochish** | “Chrome’ni och”, “Spotify’ni ishga tushir” | Istalgan ilova yoki saytni ochadi |
+| 🌐 **Brauzer** | “… ni qidir”, “Instagram’ni och” | Mavjud Chrome’ingizda **yangi tab** (yangi oyna emas) |
+| 📈 **Trading (TradingView)** | “oltin grafigini och”, “15 daqiqalik qil”, “RSI qo‘sh”, “trend chiz” | Grafik ochadi (XAUUSD…), timeframe’ni o‘zgartiradi, indikator qo‘shadi, trend / fib / support-resistance chizadi |
+| 💬 **Xabar yuborish** | “Ali’ga Telegram’da salom deb yoz” | Xabar yuboradi — ochiq ilovani ishlatadi, qayta ochmaydi |
+| 📥 **Xabarni o‘qish** | “Ali nima dedi?” | Kelgan oxirgi xabarlarni ovoz bilan o‘qib beradi |
+| 📸 **Skrinshot** | “skrinshot ol”, “Chrome ekranini ol”, “2-monitorni ol” | To‘liq ekran, **ko‘p monitorni biladi**, Pictures’ga saqlaydi |
+| ⏰ **Eslatma va budilnik** | “soat 7 ga eslat”, “budilnik qo‘y” | Vaqtli eslatma / budilnik o‘rnatadi |
+| 📝 **Eslatma va ro‘yxat** | “eslatma yoz…”, “xarid ro‘yxatiga sut qo‘sh” | Tez eslatmalar va nomli ro‘yxatlar |
+| 🌦️ **Ma’lumot** | “Toshkentda ob-havo”, “soat nechi”, “… qidir” | Ob-havo, vaqt/sana, veb-qidiruv |
+| ▶️ **YouTube** | “lo-fi musiqa qo‘y”, “trenddagi videolar” | YouTube videolarini qo‘yadi / ko‘rsatadi |
+| 🖥️ **Tizim boshqaruvi** | “ovozni 50 qil”, “ekranni qulfla”, “wifi o‘chir”, “pauza” | Ovoz, yorqinlik, wifi, quvvat, media tugmalari |
+| 🖱️ **Avtomatlashtirish** | “yoz…”, “shu yerga bos”, “pastga aylantir” | Sichqoncha / klaviatura / oyna boshqaruvi |
+| 📂 **Fayllar** | “ish stolimni ko‘rsat”, “report.pdf ni top” | Fayl va papka boshqaruvi |
+| 📄 **Fayl AI** | *PDF/CSV/rasm tashlang →* “buni umumlashtir” | Rasm, PDF, CSV, audio, videoni qayta ishlaydi |
+| 💻 **Dasturlash** | “python skript yoz …” | Kod yozadi, tahrirlaydi, ishga tushiradi; loyihalar quradi |
+| 🧩 **Ko‘p bosqichli** | “… ni o‘rgan va faylga saqla” | Mustaqil ko‘p bosqichli vazifani rejalashtiradi |
+| 👁️ **Ko‘rish (Vision)** | “ekranimda nima bor?” | Ekranni vision model bilan tahlil qiladi |
+| 🎮 **O‘yinlar** | “Steam o‘yinlarimni yangila” | Steam / Epic o‘rnatish va yangilash |
+| 🧠 **Xotira** | “mening ismim Ali”, “Toshkentda yashayman” | Shaxsiy faktlarni suhbatlar oralig‘ida eslab qoladi |
+
+---
+
+## 🚀 Boshlash
+
+> **Talablar:** Windows 10/11 · [Python 3.12](https://www.python.org/downloads/) (*“Add Python to PATH”* ni belgilang) · internet · mikrofon
 
 ```bash
 git clone https://github.com/sensat1onall/Jarvis.git
@@ -120,71 +120,71 @@ cd Jarvis
 run.bat
 ```
 
-On the **first run** it automatically:
-1. Creates an isolated `.venv` and installs all dependencies (a few minutes),
-2. Opens the **Initialisation** overlay — pick your **STT**, **LLM** and **TTS** engines and paste your API keys,
-3. Comes online. Start talking. 🎙️
+**Birinchi ishga tushirishda** u avtomatik ravishda:
+1. Alohida `.venv` muhitini yaratadi va barcha kutubxonalarni o‘rnatadi (bir necha daqiqa),
+2. **Initialisation** oynasini ochadi — **STT**, **LLM** va **TTS** dvigatellarini tanlab, API kalitlaringizni kiritasiz,
+3. Onlayn bo‘ladi. Gapira boshlang. 🎙️
 
-After setup, change anything anytime with the **⚙ CONFIGURE** button — no restart needed (your keys are merged in, never wiped).
-
----
-
-## 🔌 Engines (pick on the setup screen)
-
-| Layer | Cloud (API key) | Offline (local) |
-|-------|-----------------|-----------------|
-| 🗣️ **Speech-to-Text** | ElevenLabs Scribe | faster-whisper · Vosk |
-| 🧠 **LLM** | OpenAI (gpt-4o-mini…) | Ollama (qwen2.5, llama3.2…) |
-| 🔊 **Text-to-Speech** | ElevenLabs · Muxlisa (Uzbek) | EdgeTTS (free) · Kokoro |
-
-The **all-cloud** setup (ElevenLabs → OpenAI → Muxlisa) is the fastest and needs no GPU. Cloud calls auto-retry on transient network hiccups.
+Sozlashdan keyin istalgan vaqtda **⚙ CONFIGURE** tugmasi orqali hammasini o‘zgartirasiz — qayta ishga tushirish shart emas (kalitlaringiz birlashtiriladi, hech qachon o‘chmaydi).
 
 ---
 
-## 📁 Project structure
+## 🔌 Dvigatellar (sozlash oynasida tanlanadi)
+
+| Qatlam | Bulut (API kalit) | Oflayn (lokal) |
+|--------|-------------------|----------------|
+| 🗣️ **Nutqdan matnga** | ElevenLabs Scribe | faster-whisper · Vosk |
+| 🧠 **Til modeli (LLM)** | OpenAI (gpt-4o-mini…) | Ollama (qwen2.5, llama3.2…) |
+| 🔊 **Matndan nutqqa** | ElevenLabs · Muxlisa (o‘zbek) | EdgeTTS (bepul) · Kokoro |
+
+**To‘liq bulutli** sozlama (ElevenLabs → OpenAI → Muxlisa) eng tezi va GPU talab qilmaydi. Bulut so‘rovlari vaqtinchalik tarmoq uzilishlarida o‘zi qayta uradi.
+
+---
+
+## 📁 Loyiha tuzilmasi
 
 ```
-main.py            # the turn loop, tool declarations & routing, TTS worker, mic loops
-ui.py              # PyQt6 HUD (HUD canvas, system monitor, log, file drop, setup overlay)
-run.bat            # launcher — creates the venv on first run
+main.py            # navbat tsikli, vosita e'lonlari va yo'naltirish, TTS, mic loop
+ui.py              # PyQt6 HUD (HUD, tizim monitori, log, fayl tashlash, sozlash oynasi)
+run.bat            # ishga tushiruvchi — birinchi marta venv'ni o'zi yaratadi
 
 core/
-  llm_client.py    # provider-aware LLM (OpenAI / Ollama) — stream, tools, vision
-  stt.py           # speech-to-text engines
-  tts.py           # text-to-speech engines
-  prompt.txt       # the assistant's system prompt
-  installer.py     # auto-installs only the packages your config needs
+  llm_client.py    # provayderga moslashgan LLM (OpenAI / Ollama) — stream, vosita, vision
+  stt.py           # nutqdan matnga dvigatellari
+  tts.py           # matndan nutqqa dvigatellari
+  prompt.txt       # yordamchining tizim prompti
+  installer.py     # konfiguratsiyaga kerak bo'lgan kutubxonalarnigina o'rnatadi
 
-actions/           # one module per capability (open_app, browser_control,
+actions/           # har bir imkoniyat uchun bitta modul (open_app, browser_control,
                    # tradingview, send_message, screenshot, notes, reminder, …)
-agent/             # autonomous multi-step task system (planner -> executor -> recovery)
-memory/            # long-term personal facts + config management
+agent/             # mustaqil ko'p bosqichli vazifa tizimi (planner -> executor -> recovery)
+memory/            # uzoq muddatli shaxsiy faktlar + konfiguratsiya boshqaruvi
 ```
 
-> **Adding a tool** = add it to `TOOL_DECLARATIONS` + a branch in `_execute_tool()` in `main.py`, with the logic in `actions/`.
+> **Yangi vosita qo‘shish** = uni `main.py` dagi `TOOL_DECLARATIONS` ga + `_execute_tool()` ga shox qo‘shing, mantiqni esa `actions/` ga joylang.
 
 ---
 
-## 🔐 Privacy & keys
+## 🔐 Maxfiylik va kalitlar
 
-- **API keys are stored only in `config/api_keys.json`, which is git-ignored** and never pushed.
-- Long-term memory (`memory/long_term.json`) stays on your machine too.
-- With local engines (Whisper + Ollama + EdgeTTS/Kokoro), it can run **100% offline**.
+- **API kalitlar faqat `config/api_keys.json` da saqlanadi — u git tomonidan e’tiborsiz qoldiriladi** va hech qachon yuklanmaydi.
+- Uzoq muddatli xotira (`memory/long_term.json`) ham faqat kompyuteringizda qoladi.
+- Lokal dvigatellar bilan (Whisper + Ollama + EdgeTTS/Kokoro) u **100% oflayn** ishlay oladi.
 
 ---
 
-## ⌨️ Shortcuts
+## ⌨️ Tugmalar
 
-| Key | Action |
-|-----|--------|
-| **F4** | Mute / unmute the microphone |
-| **F11** | Toggle fullscreen |
-| **Esc** | Stop speaking / interrupt |
+| Tugma | Amal |
+|-------|------|
+| **F4** | Mikrofonni o‘chirish / yoqish |
+| **F11** | To‘liq ekran |
+| **Esc** | Gapirishni to‘xtatish / bo‘lish |
 
 ---
 
 <div align="center">
 
-Built on the open-source **MARK XL** voice-assistant base · powered by Python + PyQt6.
+Ochiq manbali **MARK XL** ovozli-yordamchi asosida qurilgan · Python + PyQt6 quvvatida.
 
 </div>
