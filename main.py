@@ -852,6 +852,13 @@ class JarvisLocal:
         self._tts_queue:      queue.Queue = queue.Queue()
         self._conversation:   list[dict]  = []
 
+        # Longer memory: keep MAX_HISTORY turns verbatim, and fold OLDER turns
+        # that fall off the window into a rolling summary (built in the
+        # background) so long conversations keep their context cheaply.
+        self._history_summary = ""
+        self._dropped_buf:    list[str] = []
+        self._history_lock    = threading.Lock()
+
         # Barge-in / 'Jarvis Stop': set when the user interrupts; blocks further
         # speech until the next command clears it.
         self._stop_flag       = threading.Event()
@@ -897,8 +904,51 @@ class JarvisLocal:
         parts = [sys_p]
         if mem_str:
             parts.append(mem_str)
+        with self._history_lock:
+            conv_sum = self._history_summary
+        if conv_sum:
+            parts.append(f"[EARLIER CONVERSATION SUMMARY]\n{conv_sum}")
         parts.append(time_ctx)
         return "\n\n".join(parts)
+
+    def _enqueue_summary(self, dropped: list) -> None:
+        """Buffer turns that fell off the history window; once enough accumulate,
+        summarise them in the background and fold them into _history_summary so
+        older context survives truncation without bloating every prompt."""
+        texts = []
+        for m in dropped:
+            role    = m.get("role")
+            content = (m.get("content") or "").strip()
+            if role in ("user", "assistant") and content:
+                texts.append(f"{role}: {content}")
+        if not texts:
+            return
+        with self._history_lock:
+            self._dropped_buf.extend(texts)
+            if len(self._dropped_buf) < 6:      # batch — don't summarise every turn
+                return
+            batch = self._dropped_buf
+            self._dropped_buf = []
+            prev = self._history_summary
+        threading.Thread(target=self._summarize_history,
+                         args=(prev, batch), daemon=True).start()
+
+    def _summarize_history(self, prev: str, batch: list) -> None:
+        try:
+            from core.llm_client import call_llm_text
+            sys_p = (
+                "You maintain a running memory of an ongoing voice-assistant conversation. "
+                "Merge the PREVIOUS SUMMARY and the NEW LINES into ONE concise summary of the "
+                "important facts, decisions, preferences and unfinished threads (not small talk). "
+                "Keep it under 120 words. Output ONLY the summary text."
+            )
+            prompt = f"PREVIOUS SUMMARY:\n{prev or '(none)'}\n\nNEW LINES:\n" + "\n".join(batch)
+            out = call_llm_text(prompt, system=sys_p, timeout=25).strip()
+            if out:
+                with self._history_lock:
+                    self._history_summary = out[:1200]
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     # Speaking state & TTS
@@ -1131,12 +1181,14 @@ class JarvisLocal:
         new_stt_engine = new_config.get("stt_engine", "whisper").lower()
         self._config = new_config
 
-        # Install any packages required by the new config
-        try:
-            from core.installer import install_for_config
-            install_for_config(new_config, log=self.ui.write_log)
-        except Exception as e:
-            self.ui.write_log(f"ERR: Dependency install — {e}")
+        # Install any packages required by the new config (source runs only —
+        # a packaged .exe has everything bundled and no pip to install with).
+        if not getattr(sys, "frozen", False):
+            try:
+                from core.installer import install_for_config
+                install_for_config(new_config, log=self.ui.write_log)
+            except Exception as e:
+                self.ui.write_log(f"ERR: Dependency install — {e}")
 
         # TTS: always hot-reload (runs in queue worker, safe to swap)
         try:
@@ -1351,8 +1403,27 @@ class JarvisLocal:
         if not self.ui.muted:
             self.ui.set_state("LISTENING")
 
+        self._log_activity(name, args, result)
         print(f"[JARVIS] 📤 {name} → {str(result)[:80]}")
         return result
+
+    def _log_activity(self, tool: str, args: dict, result) -> None:
+        """Append one tool execution to the searchable activity history
+        (~/.jarvis/activity.jsonl).  Best-effort; never breaks a turn."""
+        try:
+            import pathlib
+            rec = {
+                "ts":     datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "tool":   tool,
+                "args":   {k: str(v)[:80] for k, v in (args or {}).items()},
+                "result": str(result)[:200],
+            }
+            log = pathlib.Path.home() / ".jarvis" / "activity.jsonl"
+            log.parent.mkdir(parents=True, exist_ok=True)
+            with open(log, "a", encoding="utf-8") as f:
+                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     # LLM processing loop
@@ -1384,9 +1455,11 @@ class JarvisLocal:
 
         self._conversation.append({"role": "user", "content": user_text})
 
-        MAX_HISTORY = 10
+        MAX_HISTORY = 20
         if len(self._conversation) > MAX_HISTORY:
+            dropped = self._conversation[:-MAX_HISTORY]
             self._conversation = self._conversation[-MAX_HISTORY:]
+            self._enqueue_summary(dropped)
 
         messages = [
             {"role": "system", "content": self._build_system_prompt()}
@@ -1782,7 +1855,7 @@ class JarvisLocal:
                     self._tts_ready.set()          # unblock _tts_worker
                     self.ui.write_log("SYS: TTS ready.")
                     self.ui.mark_startup_ready("tts")
-                    self.ui.set_startup_status("● All systems ready.")
+                    self.ui.set_startup_status("● Barcha tizimlar tayyor.")
                     self.ui.hide_startup_panel()
                     self.speak("Jarvis to'liq ishga tayyor.")
                 except Exception as e:
@@ -1804,7 +1877,7 @@ class JarvisLocal:
             # ── Go online immediately ──────────────────────────────────────
             self.ui.write_log("SYS: JARVIS online.")
             self.ui.set_state("LISTENING")
-            self.ui.set_startup_status("● JARVIS online · Voice loading in background…")
+            self.ui.set_startup_status("● JARVIS onlayn · Ovoz fonda yuklanmoqda…")
 
             threading.Thread(target=self._tts_worker,         daemon=True).start()
             threading.Thread(target=self._text_command_loop,  daemon=True).start()
@@ -1837,7 +1910,7 @@ def main() -> None:
     threading.Thread(target=_preload_torch, daemon=True).start()
     # ───────────────────────────────────────────────────────────────────────
 
-    ui = JarvisUI("face.png")
+    ui = JarvisUI(str(BASE_DIR / "face.png"))
 
     def runner():
         # 1. Wait until the user completes the setup overlay (first run)
@@ -1852,8 +1925,13 @@ def main() -> None:
 
         def _do_install():
             try:
-                from core.installer import install_for_config
-                install_for_config(cfg, log=ui.write_log)
+                if getattr(sys, "frozen", False):
+                    # Packaged .exe — all dependencies are bundled at build time;
+                    # there is no pip to install into, so skip the check.
+                    ui.write_log("SYS: Packaged build — dependencies bundled.")
+                else:
+                    from core.installer import install_for_config
+                    install_for_config(cfg, log=ui.write_log)
             except Exception as e:
                 ui.write_log(f"ERR: Dependency install — {e}")
             finally:

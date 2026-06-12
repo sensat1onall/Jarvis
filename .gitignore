@@ -10,6 +10,13 @@ config/api_keys.json
 **/api_keys.json
 memory/long_term.json
 
+# ── Build artifacts (PyInstaller) — large, machine-specific ──────
+# dist/ also receives a copy of config/api_keys.json for sharing, so it
+# must never be committed. The build recipe (jarvis.spec, build_exe.bat) IS
+# tracked so anyone can rebuild.
+build/
+dist/
+
 # ── Local-only artifacts ─────────────────────────────────────────
 Jarvis Intallation/
 *.zip

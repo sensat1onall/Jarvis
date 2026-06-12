@@ -125,7 +125,17 @@ run.bat
 2. **Initialisation** oynasini ochadi — **STT**, **LLM** va **TTS** dvigatellarini tanlab, API kalitlaringizni kiritasiz,
 3. Onlayn bo‘ladi. Gapira boshlang. 🎙️
 
-Sozlashdan keyin istalgan vaqtda **⚙ CONFIGURE** tugmasi orqali hammasini o‘zgartirasiz — qayta ishga tushirish shart emas (kalitlaringiz birlashtiriladi, hech qachon o‘chmaydi).
+Sozlashdan keyin istalgan vaqtda **⚙ SOZLAMALAR** tugmasi orqali hammasini o‘zgartirasiz — qayta ishga tushirish shart emas (kalitlaringiz birlashtiriladi, hech qachon o‘chmaydi).
+
+### 📦 Tayyor `.exe` (Python shart emas)
+
+Python o‘rnatishni xohlamasangiz — bitta papkadan ishga tushiradigan mustaqil `.exe` quring:
+
+```bash
+build_exe.bat
+```
+
+Bu `dist\JARVIS\JARVIS.exe` ni yaratadi (bulutli sozlama uchun; og‘ir lokal modellar kiritilmaydi, shuning uchun GPU ham, Python ham kerak emas). Butun `dist\JARVIS` papkasini zip qilib ulashishingiz mumkin — qabul qiluvchi `JARVIS.exe` ni ikki marta bosadi, tamom. Kalitlaringiz `dist\JARVIS\config\` ichida boradi, shuning uchun faqat **ishongan** odamlarga bering.
 
 ---
 

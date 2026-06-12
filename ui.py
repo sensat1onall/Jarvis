@@ -23,8 +23,8 @@ from PyQt6.QtGui import (
     QRadialGradient, QShortcut,
 )
 from PyQt6.QtWidgets import (
-    QApplication, QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QLineEdit,
-    QMainWindow, QPushButton, QScrollArea, QSizePolicy, QTextEdit,
+    QApplication, QComboBox, QDialog, QFileDialog, QFrame, QHBoxLayout, QLabel,
+    QLineEdit, QMainWindow, QPushButton, QScrollArea, QSizePolicy, QTextEdit,
     QVBoxLayout, QWidget, QProgressBar,
 )
 
@@ -473,18 +473,18 @@ class HudCanvas(QWidget):
         # status text
         sy = cy + fw * 0.40
         if self.muted:
-            txt, col = "⊘  MUTED",     qcol(C.MUTED_C)
+            txt, col = "⊘  O'CHIQ",     qcol(C.MUTED_C)
         elif self.speaking:
-            txt, col = "●  SPEAKING",  qcol(C.ACC)
+            txt, col = "●  GAPIRYAPTI",  qcol(C.ACC)
         elif self.state == "THINKING":
             sym = "◈" if self._blink else "◇"
-            txt, col = f"{sym}  THINKING",   qcol(C.ACC2)
+            txt, col = f"{sym}  O'YLAYAPTI",   qcol(C.ACC2)
         elif self.state == "PROCESSING":
             sym = "▷" if self._blink else "▶"
-            txt, col = f"{sym}  PROCESSING", qcol(C.ACC2)
+            txt, col = f"{sym}  BAJARYAPTI", qcol(C.ACC2)
         elif self.state == "LISTENING":
             sym = "●" if self._blink else "○"
-            txt, col = f"{sym}  LISTENING",  qcol(C.GREEN)
+            txt, col = f"{sym}  TINGLAYAPTI",  qcol(C.GREEN)
         else:
             sym = "●" if self._blink else "○"
             txt, col = f"{sym}  {self.state}", qcol(C.PRI)
@@ -1225,7 +1225,7 @@ class SetupOverlay(QWidget):
         btn_row = QHBoxLayout(); btn_row.setSpacing(8)
 
         if mode == "config":
-            cancel_btn = QPushButton("✕  CANCEL")
+            cancel_btn = QPushButton("✕  BEKOR QILISH")
             cancel_btn.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
             cancel_btn.setFixedHeight(34)
             cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1241,7 +1241,7 @@ class SetupOverlay(QWidget):
             cancel_btn.clicked.connect(self.hide)
             btn_row.addWidget(cancel_btn)
 
-        btn_label = "▸  APPLY CHANGES" if mode == "config" else "▸  INITIALISE SYSTEMS"
+        btn_label = "▸  O'ZGARISHLARNI SAQLASH" if mode == "config" else "▸  TIZIMNI ISHGA TUSHIRISH"
         init_btn = QPushButton(btn_label)
         init_btn.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
         init_btn.setFixedHeight(34)
@@ -1460,7 +1460,7 @@ class StartupPanel(QWidget):
         lay.setSpacing(10)
 
         # ── Title ──────────────────────────────────────────────────────
-        title = QLabel("◈  SYSTEMS INITIALISING")
+        title = QLabel("◈  TIZIM ISHGA TUSHMOQDA")
         title.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setStyleSheet(f"color: {C.PRI}; background: transparent;")
@@ -1471,9 +1471,9 @@ class StartupPanel(QWidget):
         # ── Component rows ──────────────────────────────────────────────
         self._rows: dict[str, dict] = {}
         _COMPS = [
-            ("stt", "SPEECH RECOGNITION  (STT)", C.GREEN),
-            ("llm", "LANGUAGE MODEL  (LLM)",      C.ACC2),
-            ("tts", "VOICE SYNTHESIS  (TTS)",      C.PRI),
+            ("stt", "NUTQNI ANIQLASH  (STT)", C.GREEN),
+            ("llm", "TIL MODELI  (LLM)",      C.ACC2),
+            ("tts", "OVOZ SINTEZI  (TTS)",      C.PRI),
         ]
         for key, label, color in _COMPS:
             box = QWidget()
@@ -1491,7 +1491,7 @@ class StartupPanel(QWidget):
             top.addWidget(nm)
             top.addStretch()
 
-            st = QLabel("LOADING…")
+            st = QLabel("YUKLANMOQDA…")
             st.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
             st.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent; border: none;")
             top.addWidget(st)
@@ -1518,14 +1518,14 @@ class StartupPanel(QWidget):
         lay.addSpacing(4)
 
         # ── Bottom status ───────────────────────────────────────────────
-        self._status_lbl = QLabel("Initialising components…")
+        self._status_lbl = QLabel("Komponentlar ishga tushmoqda…")
         self._status_lbl.setFont(QFont("Courier New", 8))
         self._status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._status_lbl.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
         self._status_lbl.setWordWrap(True)
         lay.addWidget(self._status_lbl)
 
-        tip = QLabel("Loading speech · language · voice engines (local or cloud per config)")
+        tip = QLabel("Nutq · til · ovoz dvigatellari yuklanmoqda (konfiguratsiyaga ko'ra lokal yoki bulutli)")
         tip.setFont(QFont("Courier New", 7))
         tip.setAlignment(Qt.AlignmentFlag.AlignCenter)
         tip.setStyleSheet(f"color: {C.BORDER}; background: transparent;")
@@ -1538,7 +1538,7 @@ class StartupPanel(QWidget):
         row = self._rows[key]
         ok     = status == "ready"
         color  = row["color"] if ok else C.RED
-        label  = "READY  ✓" if ok else "ERROR  ✗"
+        label  = "TAYYOR  ✓" if ok else "XATO  ✗"
 
         bar = row["bar"]
         bar.setRange(0, 100)
@@ -1557,7 +1557,9 @@ class StartupPanel(QWidget):
 
     def set_status(self, text: str) -> None:
         self._status_lbl.setText(text)
-        col = C.GREEN if "online" in text.lower() else C.TEXT_DIM
+        low = text.lower()
+        is_ready = any(w in low for w in ("online", "onlayn", "tayyor", "ready"))
+        col = C.GREEN if is_ready else C.TEXT_DIM
         self._status_lbl.setStyleSheet(f"color: {col}; background: transparent;")
 
 
@@ -1808,7 +1810,7 @@ class MainWindow(QMainWindow):
         lay.setContentsMargins(8, 10, 8, 10)
         lay.setSpacing(6)
 
-        hdr = QLabel("◈ SYS MONITOR")
+        hdr = QLabel("◈ TIZIM MONITORI")
         hdr.setFont(QFont("Courier New", 7, QFont.Weight.Bold))
         hdr.setStyleSheet(f"color: {C.PRI}; background: transparent; "
                           f"border-bottom: 1px solid {C.BORDER}; padding-bottom: 4px;")
@@ -1855,9 +1857,9 @@ class MainWindow(QMainWindow):
         lay.addStretch()
 
         for txt, col in [
-            ("AI CORE\nACTIVE",     C.GREEN),
-            ("SEC\nCLEARED",        C.PRI),
-            ("PROTOCOL\nXL",         C.TEXT_DIM),
+            ("AI YADRO\nFAOL",      C.GREEN),
+            ("XAVFSIZLIK\nRUXSAT",  C.PRI),
+            ("PROTOKOL\nXL",         C.TEXT_DIM),
         ]:
             lbl = QLabel(txt)
             lbl.setFont(QFont("Courier New", 7, QFont.Weight.Bold))
@@ -1883,7 +1885,7 @@ class MainWindow(QMainWindow):
             l.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
             return l
 
-        lay.addWidget(_sec("ACTIVITY LOG"))
+        lay.addWidget(_sec("FAOLIYAT JURNALI"))
         self._log = LogWidget()
         lay.addWidget(self._log, stretch=1)
 
@@ -1891,12 +1893,12 @@ class MainWindow(QMainWindow):
         sep.setStyleSheet(f"color: {C.BORDER}; margin: 2px 0;")
         lay.addWidget(sep)
 
-        lay.addWidget(_sec("FILE UPLOAD"))
+        lay.addWidget(_sec("FAYL YUKLASH"))
         self._drop_zone = FileDropZone()
         self._drop_zone.file_selected.connect(self._on_file_selected)
         lay.addWidget(self._drop_zone)
 
-        self._file_hint = QLabel("No file loaded — drop or click above to upload")
+        self._file_hint = QLabel("Fayl yuklanmagan — yuklash uchun tepaga tashlang yoki bosing")
         self._file_hint.setFont(QFont("Courier New", 7))
         self._file_hint.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
         self._file_hint.setWordWrap(True)
@@ -1906,7 +1908,7 @@ class MainWindow(QMainWindow):
         sep2.setStyleSheet(f"color: {C.BORDER}; margin: 2px 0;")
         lay.addWidget(sep2)
 
-        lay.addWidget(_sec("COMMAND INPUT"))
+        lay.addWidget(_sec("BUYRUQ KIRITISH"))
         lay.addLayout(self._build_input_row())
 
         self._ptt_btn = QPushButton("🎤  BOSIB TURIB GAPIR")
@@ -1918,7 +1920,7 @@ class MainWindow(QMainWindow):
         self._style_ptt_btn(False)
         lay.addWidget(self._ptt_btn)
 
-        self._mute_btn = QPushButton("🎙  MICROPHONE ACTIVE")
+        self._mute_btn = QPushButton("🎙  MIKROFON YONIQ")
         self._mute_btn.setFixedHeight(30)
         self._mute_btn.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
         self._mute_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1926,7 +1928,7 @@ class MainWindow(QMainWindow):
         self._style_mute_btn()
         lay.addWidget(self._mute_btn)
 
-        fs_btn = QPushButton("⛶  FULLSCREEN  [F11]")
+        fs_btn = QPushButton("⛶  TO'LIQ EKRAN  [F11]")
         fs_btn.setFixedHeight(26)
         fs_btn.setFont(QFont("Courier New", 7))
         fs_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1942,7 +1944,7 @@ class MainWindow(QMainWindow):
         fs_btn.clicked.connect(self._toggle_fullscreen)
         lay.addWidget(fs_btn)
 
-        cfg_btn = QPushButton("⚙  CONFIGURE")
+        cfg_btn = QPushButton("⚙  SOZLAMALAR")
         cfg_btn.setFixedHeight(26)
         cfg_btn.setFont(QFont("Courier New", 7))
         cfg_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1958,12 +1960,28 @@ class MainWindow(QMainWindow):
         cfg_btn.clicked.connect(self._show_config)
         lay.addWidget(cfg_btn)
 
+        hist_btn = QPushButton("📜  TARIX")
+        hist_btn.setFixedHeight(26)
+        hist_btn.setFont(QFont("Courier New", 7))
+        hist_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        hist_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent; color: {C.TEXT_MED};
+                border: 1px solid {C.BORDER}; border-radius: 3px;
+            }}
+            QPushButton:hover {{
+                color: {C.PRI}; border: 1px solid {C.PRI};
+            }}
+        """)
+        hist_btn.clicked.connect(self._show_history)
+        lay.addWidget(hist_btn)
+
         return w
 
     def _build_input_row(self) -> QHBoxLayout:
         row = QHBoxLayout(); row.setSpacing(5)
         self._input = QLineEdit()
-        self._input.setPlaceholderText("Type a command or question…")
+        self._input.setPlaceholderText("Buyruq yoki savol yozing…")
         self._input.setFont(QFont("Courier New", 9))
         self._input.setFixedHeight(30)
         self._input.setStyleSheet(f"""
@@ -2015,7 +2033,7 @@ class MainWindow(QMainWindow):
         cat  = _file_category(p)
         icon, _ = _FILE_ICONS.get(cat, _FILE_ICONS["unknown"])
         size = _fmt_size(p.stat().st_size)
-        self._file_hint.setText(f"{icon}  {p.name}  ·  {size}  ·  Tell JARVIS what to do with it")
+        self._file_hint.setText(f"{icon}  {p.name}  ·  {size}  ·  JARVIS'ga nima qilishni ayting")
         self._log.append_log(f"FILE: {p.name} ({size}) loaded")
         if self.on_text_command:
             msg = (
@@ -2039,7 +2057,7 @@ class MainWindow(QMainWindow):
 
     def _style_mute_btn(self):
         if self._muted:
-            self._mute_btn.setText("🔇  MICROPHONE MUTED")
+            self._mute_btn.setText("🔇  MIKROFON O'CHIQ")
             self._mute_btn.setStyleSheet(f"""
                 QPushButton {{
                     background: #140006; color: {C.MUTED_C};
@@ -2047,7 +2065,7 @@ class MainWindow(QMainWindow):
                 }}
             """)
         else:
-            self._mute_btn.setText("🎙  MICROPHONE ACTIVE")
+            self._mute_btn.setText("🎙  MIKROFON YONIQ")
             self._mute_btn.setStyleSheet(f"""
                 QPushButton {{
                     background: #00140a; color: {C.GREEN};
@@ -2196,6 +2214,86 @@ class MainWindow(QMainWindow):
         self._log.append_log(f"SYS: Config updated. LLM={llm} | STT={stt} | TTS={tts}")
         if self._on_reconfigure_cb:
             self._on_reconfigure_cb(merged)
+
+    def _show_history(self):
+        """Searchable activity history — read ~/.jarvis/activity.jsonl and show
+        the tool calls JARVIS has performed, newest first, with a live filter."""
+        import html as _html
+        import pathlib
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("📜  Faoliyat tarixi")
+        dlg.resize(660, 500)
+        dlg.setStyleSheet(f"background: {C.DARK}; color: {C.WHITE};")
+        v = QVBoxLayout(dlg)
+        v.setContentsMargins(12, 12, 12, 12); v.setSpacing(8)
+
+        search = QLineEdit()
+        search.setPlaceholderText("Qidirish… (masalan: telegram, eslatma, ob-havo)")
+        search.setFont(QFont("Courier New", 10))
+        search.setStyleSheet(f"""
+            QLineEdit {{ background:#000d14; color:{C.WHITE};
+                border:1px solid {C.BORDER}; border-radius:3px; padding:5px 8px; }}
+            QLineEdit:focus {{ border:1px solid {C.PRI}; }}
+        """)
+        v.addWidget(search)
+
+        view = QTextEdit(); view.setReadOnly(True)
+        view.setFont(QFont("Courier New", 9))
+        view.setStyleSheet(
+            f"background:#00080d; color:{C.TEXT_MED}; border:1px solid {C.BORDER};"
+        )
+        v.addWidget(view, stretch=1)
+
+        records = []
+        try:
+            log = pathlib.Path.home() / ".jarvis" / "activity.jsonl"
+            if log.exists():
+                for line in log.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        records.append(json.loads(line))
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        records.reverse()                       # newest first
+
+        def _render(flt: str = ""):
+            flt = (flt or "").lower().strip()
+            rows = []
+            for r in records:
+                ts     = str(r.get("ts", ""))
+                tool   = str(r.get("tool", ""))
+                args   = r.get("args", {}) or {}
+                res    = str(r.get("result", ""))
+                args_s = ", ".join(f"{k}={v}" for k, v in args.items())
+                if flt and flt not in f"{ts} {tool} {args_s} {res}".lower():
+                    continue
+                e = _html.escape
+                line = (f"<span style='color:{C.PRI}'>[{e(ts)}]</span> "
+                        f"<b style='color:{C.ACC2}'>{e(tool)}</b>")
+                if args_s:
+                    line += f" <span style='color:{C.TEXT_DIM}'>({e(args_s)})</span>"
+                line += (f"<br><span style='color:{C.TEXT_MED}'>"
+                         f"&nbsp;&nbsp;→ {e(res)}</span>")
+                rows.append(line)
+            if not rows:
+                view.setHtml(
+                    f"<i style='color:{C.TEXT_DIM}'>Hech narsa topilmadi.</i>" if flt
+                    else f"<i style='color:{C.TEXT_DIM}'>Hali faoliyat tarixi yo'q.</i>"
+                )
+            else:
+                view.setHtml(
+                    f"<div style='color:{C.TEXT_DIM};margin-bottom:6px'>{len(rows)} ta yozuv</div>"
+                    + "<hr style='border-color:#10283a'>".join(rows)
+                )
+
+        search.textChanged.connect(lambda t: _render(t))
+        _render("")
+        dlg.exec()
 
 
 class _RootShim:
