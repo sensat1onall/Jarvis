@@ -94,9 +94,12 @@ Ba’zi natijalar (qidiruv, ekran tahlili, grafik chizish) ikkinchi LLM bosqichi
 | 💬 **Xabar yuborish** | “Ali’ga Telegram’da salom deb yoz” | Xabar yuboradi — ochiq ilovani ishlatadi, qayta ochmaydi |
 | 📥 **Xabarni o‘qish** | “Ali nima dedi?” | Kelgan oxirgi xabarlarni ovoz bilan o‘qib beradi |
 | 📸 **Skrinshot** | “skrinshot ol”, “Chrome ekranini ol”, “2-monitorni ol” | To‘liq ekran, **ko‘p monitorni biladi**, Pictures’ga saqlaydi |
-| ⏰ **Eslatma va budilnik** | “soat 7 ga eslat”, “budilnik qo‘y” | Vaqtli eslatma / budilnik o‘rnatadi |
+| ⏰ **Eslatma va budilnik** | “soat 7 ga eslat”, “budilnik qo‘y” | Vaqtli eslatma / budilnik — vaqti kelganda JARVIS **ovoz chiqarib** eslatadi |
 | 📝 **Eslatma va ro‘yxat** | “eslatma yoz…”, “xarid ro‘yxatiga sut qo‘sh” | Tez eslatmalar va nomli ro‘yxatlar |
 | 🌦️ **Ma’lumot** | “Toshkentda ob-havo”, “soat nechi”, “… qidir” | Ob-havo, vaqt/sana, veb-qidiruv |
+| 💱 **O‘zbek jonli ma’lumot** | “dollar kursi qancha”, “bitcoin narxi”, “namoz vaqti”, “bugungi yangiliklar” | Markaziy bank valyuta kursi, kripto narxlari, namoz vaqtlari, O‘zbek yangiliklari |
+| 🌅 **Ertalabki brifing** | “ertalabki brifing”, “har kuni 8 da brifing ber” | Sana, ob-havo, valyuta va bugungi eslatmalarni bitta ovozli xulosa; kunlik avtomatik ham |
+| 🌐 **Tarjima** | “buni inglizchaga o‘gir”, “ruscha qil” | Matnni istalgan tilga tarjima qiladi |
 | ▶️ **YouTube** | “lo-fi musiqa qo‘y”, “trenddagi videolar” | YouTube videolarini qo‘yadi / ko‘rsatadi |
 | 🖥️ **Tizim boshqaruvi** | “ovozni 50 qil”, “ekranni qulfla”, “wifi o‘chir”, “pauza” | Ovoz, yorqinlik, wifi, quvvat, media tugmalari |
 | 🖱️ **Avtomatlashtirish** | “yoz…”, “shu yerga bos”, “pastga aylantir” | Sichqoncha / klaviatura / oyna boshqaruvi |
@@ -106,7 +109,8 @@ Ba’zi natijalar (qidiruv, ekran tahlili, grafik chizish) ikkinchi LLM bosqichi
 | 🧩 **Ko‘p bosqichli** | “… ni o‘rgan va faylga saqla” | Mustaqil ko‘p bosqichli vazifani rejalashtiradi |
 | 👁️ **Ko‘rish (Vision)** | “ekranimda nima bor?” | Ekranni vision model bilan tahlil qiladi |
 | 🎮 **O‘yinlar** | “Steam o‘yinlarimni yangila” | Steam / Epic o‘rnatish va yangilash |
-| 🧠 **Xotira** | “mening ismim Ali”, “Toshkentda yashayman” | Shaxsiy faktlarni suhbatlar oralig‘ida eslab qoladi |
+| 🧠 **Xotira** | “mening ismim Ali”, “Toshkentda yashayman” | Shaxsiy faktlarni eslab qoladi; uzun suhbatlarni fonda umumlashtiradi |
+| 📜 **Faoliyat tarixi** | **📜 TARIX** tugmasi (HUD) | Bajarilgan barcha amallar tarixi — jonli qidiruv bilan |
 
 ---
 
@@ -144,7 +148,7 @@ Bu `dist\JARVIS\JARVIS.exe` ni yaratadi (bulutli sozlama uchun; og‘ir lokal mo
 | Qatlam | Bulut (API kalit) | Oflayn (lokal) |
 |--------|-------------------|----------------|
 | 🗣️ **Nutqdan matnga** | ElevenLabs Scribe | faster-whisper · Vosk |
-| 🧠 **Til modeli (LLM)** | OpenAI (gpt-4o-mini…) | Ollama (qwen2.5, llama3.2…) |
+| 🧠 **Til modeli (LLM)** | OpenAI (gpt-5.1, gpt-4o…) | Ollama (qwen2.5, llama3.2…) |
 | 🔊 **Matndan nutqqa** | ElevenLabs · Muxlisa (o‘zbek) | EdgeTTS (bepul) · Kokoro |
 
 **To‘liq bulutli** sozlama (ElevenLabs → OpenAI → Muxlisa) eng tezi va GPU talab qilmaydi. Bulut so‘rovlari vaqtinchalik tarmoq uzilishlarida o‘zi qayta uradi.
