@@ -329,10 +329,14 @@ def _vision_read_messages(app: str, sender: str) -> str:
     try:
         import io, base64
         from core.llm_client import call_vision
-        img = pyautogui.screenshot()
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+        from actions.computer_control import capture_window
+        cap = capture_window(app)
+        if cap:
+            b64 = cap[0]                          # cropped to just the chat window
+        else:
+            img = pyautogui.screenshot()
+            buf = io.BytesIO(); img.save(buf, format="PNG")
+            b64 = base64.b64encode(buf.getvalue()).decode("ascii")
         who = f"from {sender}" if sender else "from the other person"
         prompt = (
             f"This is a screenshot of the {app} chat app. "

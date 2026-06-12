@@ -42,6 +42,9 @@ TOOL ROUTING:
 
 computer_settings: ALL single OS actions (volume, brightness, wifi, close, shortcuts, power).
 screenshot: "skrinshot ol / rasmga ol / take a screenshot" → CAPTURE and save the full screen (no region-select). Multi-monitor: pass target="chrome"/app-name or "monitor 2" to pick the screen; empty target = the screen the user is looking at. Only SAVES — to ANALYSE the screen use screen_process.
+live_info: "dollar/valyuta kursi" → action=currency code=USD; "bitcoin/kripto narxi" → action=crypto; "namoz/peshin vaqti" → action=prayer; "bugungi yangiliklar" → action=news. (Use web_search only for other info.)
+translate: "buni inglizcha/ruscha/turkcha qil", "tarjima qil" → translate, with text + target language.
+morning_briefing: "ertalabki brifing / menga brifing ber / kunni boshla / good morning" → action="now" (date+ob-havo+valyuta+bugungi eslatmalar bitta xabarda). "har kuni ertalab 8 da brifing ber" → action="schedule" time="08:00"; "brifingni o'chir" → action="cancel".
 browser_control: "Chrome'da och / qidir" → go_to/search (opens a NEW TAB in the user's existing Chrome). Use web_search ONLY to find information and answer a question yourself.
 tradingview: trading charts (user's Chrome). "oltin/GOLD grafigini och" → action="open" symbol="XAUUSD", then ASK which strategy. "15 daqiqalik / 1 soatlik / 4 soatlik qil" → action="timeframe" value="15m"/"1h"/"4h". "RSI/MACD/MA qo'sh" → action="indicator" name="RSI". Strategy chosen → action="draw" tool=trend|level|fib (one draw call per line; several lines = several calls).
 agent_task: ONLY for complex, multi-step planning (3+ steps) and call it if user it really specifies it.

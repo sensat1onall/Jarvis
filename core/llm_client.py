@@ -221,7 +221,7 @@ def warmup_model(system_prompt: str | None = None) -> bool:
             "model":      model,
             "messages":   messages,
             "stream":     False,
-            "max_tokens": 1,
+            "max_completion_tokens": 1,
         }
         try:
             resp = requests.post(f"{url}/v1/chat/completions", json=payload, headers=_openai_headers(), timeout=180)
@@ -280,7 +280,7 @@ def call_llm(
             "model":      model,
             "messages":   _normalize_messages_for_openai(messages),
             "stream":     False,
-            "max_tokens": 150,
+            "max_completion_tokens": 150,
         }
         if tools:
             payload["tools"]       = _normalize_tools_for_openai(tools)
@@ -385,7 +385,7 @@ def call_llm_text(
         try:
             resp = requests.post(
                 f"{url}/v1/chat/completions",
-                json={"model": m, "messages": messages, "max_tokens": 600},
+                json={"model": m, "messages": messages, "max_completion_tokens": 600},
                 headers=_openai_headers(), timeout=timeout,
             )
             resp.raise_for_status()
@@ -424,7 +424,7 @@ def call_vision(image_b64: str, user_text: str, system_prompt: str = "", mime: s
     sys_msgs = [{"role": "system", "content": system_prompt}] if system_prompt else []
     if get_llm_provider() == "openai":
         model = cfg.get("vision_model") or cfg.get("llm_model", "gpt-4o-mini")
-        payload = {"model": model, "max_tokens": 400, "messages": sys_msgs + [
+        payload = {"model": model, "max_completion_tokens": 400, "messages": sys_msgs + [
             {"role": "user", "content": [
                 {"type": "text", "text": user_text},
                 {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{image_b64}"}},
@@ -468,7 +468,7 @@ def _stream_openai(
         "model":      model,
         "messages":   _normalize_messages_for_openai(messages),
         "stream":     True,
-        "max_tokens": 150,
+        "max_completion_tokens": 150,
     }
     if tools:
         payload["tools"]       = _normalize_tools_for_openai(tools)

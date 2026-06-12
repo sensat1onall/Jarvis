@@ -336,6 +336,35 @@ def _list_windows() -> "list[dict]":
     return out
 
 
+def capture_window(title: str):
+    """Best window matching `title` → (png_b64, left, top, width, height), cropped
+    to JUST that window (absolute screen coords), or None.  Feeding the vision
+    model one window instead of the whole multi-monitor desktop greatly improves
+    coordinate/OCR accuracy.  The caller adds (left, top) to map crop → screen."""
+    wins   = _list_windows()
+    chosen = _pick_window(wins, title) if wins else None
+    if not chosen:
+        return None
+    w = chosen.get("_win")
+    try:
+        left, top, width, height = int(w.left), int(w.top), int(w.width), int(w.height)
+    except Exception:
+        return None
+    if width < 120 or height < 120:
+        return None
+    try:
+        import mss
+        import mss.tools
+        import base64
+        with mss.mss() as sct:
+            shot = sct.grab({"left": left, "top": top, "width": width, "height": height})
+            png  = mss.tools.to_png(shot.rgb, shot.size)
+        return base64.b64encode(png).decode("ascii"), left, top, width, height
+    except Exception as e:
+        print(f"[capture_window] {e}")
+        return None
+
+
 def _activate_exact(full_title: str, win=None) -> bool:
     """Activate the window with this EXACT title.  pygetwindow first, then
     AppActivate with the *full* (now unambiguous) title on Windows."""

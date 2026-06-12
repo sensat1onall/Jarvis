@@ -284,6 +284,60 @@ TOOL_DECLARATIONS = [
         }
     },
     {
+        "name": "live_info",
+        "description": (
+            "Live information lookups for Uzbekistan. action='currency' (CBU so'm exchange rate; "
+            "code=USD/EUR/RUB…), action='crypto' (coins=bitcoin,ethereum…), action='prayer' (Islamic "
+            "prayer times, city default Tashkent), action='news' (today's top Uzbek headlines). "
+            "Use for: 'dollar kursi qancha', 'bitcoin narxi', 'peshin qachon', 'bugungi yangiliklar'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "currency | crypto | prayer | news"},
+                "code":   {"type": "STRING", "description": "For currency: USD, EUR, RUB…"},
+                "coins":  {"type": "STRING", "description": "For crypto: bitcoin, ethereum, ton…"},
+                "city":   {"type": "STRING", "description": "For prayer: city (default Tashkent)"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "translate",
+        "description": (
+            "Translate text into another language. Use for 'buni inglizchaga tarjima qil', "
+            "'translate this to Russian', 'ruschaga o'gir'. Pass the text and the target language."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "text":   {"type": "STRING", "description": "The text to translate"},
+                "target": {"type": "STRING", "description": "Target language, e.g. English, Russian, Turkish"},
+            },
+            "required": ["text", "target"]
+        }
+    },
+    {
+        "name": "morning_briefing",
+        "description": (
+            "Give a spoken morning briefing combining today's date/time, the live weather, "
+            "key exchange rates (USD, EUR) and the user's upcoming reminders for today. "
+            "Use for: 'ertalabki brifing', 'menga brifing ber', 'kunni boshla', 'good morning briefing', "
+            "'what's my day look like'. action='now' (default) gives it once. "
+            "action='schedule' time='HH:MM' sets a DAILY automatic briefing at that time "
+            "('har kuni ertalab 8 da brifing ber'); action='cancel' turns it off."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "now | schedule | cancel (default now)"},
+                "time":   {"type": "STRING", "description": "For schedule: daily time in HH:MM (24h), e.g. 08:00"},
+                "city":   {"type": "STRING", "description": "City for the weather (default Tashkent)"},
+            },
+            "required": []
+        }
+    },
+    {
         "name": "youtube_video",
         "description": (
             "Controls YouTube. Use for: playing videos, summarizing a video's content, "
@@ -916,6 +970,61 @@ class JarvisLocal:
         self.ui.write_log(f"ERR: {tool_name} — {short}")
         self.speak("Kechirasiz, xatolik yuz berdi.")
 
+    def _speak_out_of_band(self, text: str) -> None:
+        """Enqueue speech that ISN'T part of a turn (a fired reminder, a daily
+        briefing).  Unlike speak(), it ignores the barge-in stop flag so a
+        reminder still fires even right after a 'Jarvis, stop'."""
+        if not text or not self._tts:
+            return
+        with self._speaking_lock:
+            self._speaking = True
+        self._tts_queue.put(text)
+
+    def _speech_inbox_worker(self) -> None:
+        """Poll the file-based speech inbox: out-of-process helpers (a fired
+        reminder, the scheduled daily briefing) drop a small JSON file and we
+        speak it here — so reminders SPEAK, not just toast.  Files dropped while
+        the app was closed are spoken on the next startup (never missed)."""
+        from core.speech_bridge import inbox_dir, BRIEFING_SENTINEL
+        fail_counts: dict[str, int] = {}
+        while True:
+            try:
+                # Wait until TTS is actually loaded — leave files on disk so
+                # nothing is lost during the (brief) startup window.
+                if self._tts:
+                    for f in sorted(inbox_dir().glob("*.json"),
+                                    key=lambda p: p.stat().st_mtime):
+                        try:
+                            data = json.loads(f.read_text(encoding="utf-8"))
+                            text = (data.get("text") or "").strip()
+                        except Exception:
+                            # Possibly mid-write — retry a few cycles, then drop.
+                            fail_counts[f.name] = fail_counts.get(f.name, 0) + 1
+                            if fail_counts[f.name] > 5:
+                                try: f.unlink()
+                                except Exception: pass
+                            continue
+                        # Consume the file BEFORE speaking so a slow briefing
+                        # computation can't double-fire it.
+                        try: f.unlink()
+                        except Exception: pass
+                        fail_counts.pop(f.name, None)
+                        if not text:
+                            continue
+                        if text == BRIEFING_SENTINEL:
+                            try:
+                                from actions.briefing import morning_briefing
+                                raw = morning_briefing({"action": "now"}, player=self.ui)
+                                text = _to_uzbek(raw, tool_name="morning_briefing")
+                            except Exception as e:
+                                self.ui.write_log(f"ERR: briefing — {e}")
+                                continue
+                        self.ui.write_log(f"SYS: 🔔 inbox speech ({len(text)} chars).")
+                        self._speak_out_of_band(text)
+            except Exception:
+                pass
+            time.sleep(2.0)
+
     # ------------------------------------------------------------------
     # Wake word · barge-in / stop · push-to-talk
     # ------------------------------------------------------------------
@@ -1142,6 +1251,21 @@ class JarvisLocal:
                 r = _shot(parameters=args, player=self.ui)
                 result = r or "Done."
 
+            elif name == "live_info":
+                from actions.uzbek_info import live_info as _li
+                r = _li(parameters=args, player=self.ui)
+                result = r or "Done."
+
+            elif name == "translate":
+                from actions.uzbek_info import translate as _tr
+                r = _tr(parameters=args, player=self.ui)
+                result = r or "Done."
+
+            elif name == "morning_briefing":
+                from actions.briefing import morning_briefing as _brief
+                r = _brief(parameters=args, player=self.ui)
+                result = r or "Done."
+
             elif name == "youtube_video":
                 r = youtube_video(parameters=args, response=None, player=self.ui)
                 result = r or "Done."
@@ -1272,7 +1396,8 @@ class JarvisLocal:
         # Everything else returns a user-ready string → speak directly.
         # tradingview is here so the model can chain several draw calls in one
         # turn and then ask the strategy / next-step question itself in Uzbek.
-        _NEEDS_LLM_ROUND = {"web_search", "screen_process", "agent_task", "tradingview", "read_messages"}
+        _NEEDS_LLM_ROUND = {"web_search", "screen_process", "agent_task", "tradingview",
+                            "read_messages", "live_info", "translate", "morning_briefing"}
 
         MAX_TOOL_ROUNDS = 6
         _retried_clean  = False
@@ -1681,8 +1806,9 @@ class JarvisLocal:
             self.ui.set_state("LISTENING")
             self.ui.set_startup_status("● JARVIS online · Voice loading in background…")
 
-            threading.Thread(target=self._tts_worker,        daemon=True).start()
+            threading.Thread(target=self._tts_worker,         daemon=True).start()
             threading.Thread(target=self._text_command_loop,  daemon=True).start()
+            threading.Thread(target=self._speech_inbox_worker, daemon=True).start()
 
             # STT loop — blocks this thread forever
             if stt_engine == "vosk":

@@ -59,8 +59,58 @@ def _open_url(url: str) -> None:
     except Exception as e:
         print(f"[YouTube] ⚠️ open_url failed: {e}")
 
-def _scrape_first_video_url(query: str) -> str | None:
+def _ytdlp_search_url(query: str):
+    try:
+        import yt_dlp
+        with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True,
+                               "extract_flat": True, "skip_download": True}) as y:
+            info = y.extract_info(f"ytsearch1:{query}", download=False) or {}
+        e = info.get("entries") or []
+        if e and e[0].get("id"):
+            return f"https://www.youtube.com/watch?v={e[0]['id']}"
+    except Exception as ex:
+        print(f"[YouTube] yt-dlp search failed: {ex}")
+    return None
 
+
+def _ytdlp_info(video_id: str) -> dict:
+    try:
+        import yt_dlp
+        with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "skip_download": True}) as y:
+            i = y.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False) or {}
+        info: dict = {}
+        if i.get("title"):                  info["title"]    = i["title"]
+        if i.get("uploader"):               info["channel"]  = i["uploader"]
+        if i.get("view_count") is not None: info["views"]    = f"{i['view_count']:,}"
+        if i.get("duration"):               info["duration"] = f"{i['duration'] // 60}:{i['duration'] % 60:02d}"
+        if i.get("like_count") is not None: info["likes"]    = f"{i['like_count']:,} likes"
+        return info
+    except Exception as ex:
+        print(f"[YouTube] yt-dlp info failed: {ex}")
+    return {}
+
+
+def _ytdlp_trending(region: str, n: int) -> list:
+    try:
+        import yt_dlp
+        with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "extract_flat": True,
+                               "skip_download": True, "playlistend": n}) as y:
+            info = y.extract_info("https://www.youtube.com/feed/trending", download=False) or {}
+        out = []
+        for e in (info.get("entries") or [])[:n]:
+            if e.get("title"):
+                out.append({"rank": len(out) + 1, "title": e["title"],
+                            "channel": e.get("uploader") or e.get("channel") or "YouTube"})
+        return out
+    except Exception as ex:
+        print(f"[YouTube] yt-dlp trending failed: {ex}")
+    return []
+
+
+def _scrape_first_video_url(query: str) -> str | None:
+    u = _ytdlp_search_url(query)        # reliable, not rate-limited
+    if u:
+        return u
     if not _REQUESTS_OK:
         return None
 
@@ -199,6 +249,9 @@ def _save_summary(content: str, video_url: str) -> str:
 
 
 def _scrape_video_info(video_id: str) -> dict:
+    info = _ytdlp_info(video_id)        # reliable
+    if info:
+        return info
     if not _REQUESTS_OK:
         return {}
     url = f"https://www.youtube.com/watch?v={video_id}"
@@ -232,30 +285,10 @@ def _scrape_video_info(video_id: str) -> dict:
 
 
 def _scrape_trending(region: str = "TR", max_results: int = 8) -> list[dict]:
-    if not _REQUESTS_OK:
-        return []
-    url = f"https://www.youtube.com/feed/trending?gl={region.upper()}"
-    try:
-        r    = requests.get(url, headers=HEADERS, timeout=12)
-        html = r.text
-
-        titles   = re.findall(r'"title":\{"runs":\[\{"text":"([^"]+)"\}\]', html)
-        channels = re.findall(r'"ownerText":\{"runs":\[\{"text":"([^"]+)"', html)
-
-        results, seen = [], set()
-        for i, title in enumerate(titles):
-            if title in seen or len(title) < 5:
-                continue
-            seen.add(title)
-            channel = channels[i] if i < len(channels) else "Unknown"
-            results.append({"rank": len(results) + 1, "title": title, "channel": channel})
-            if len(results) >= max_results:
-                break
-
-        return results
-    except Exception as e:
-        print(f"[YouTube] ⚠️ Trending scrape failed: {e}")
-        return []
+    # YouTube removed the public /feed/trending page (the old HTML regex now
+    # returns help-menu junk), so rely on yt-dlp only.  If it can't fetch we
+    # return [] and the caller reports it cleanly rather than emitting garbage.
+    return _ytdlp_trending(region, max_results)
 
 def _handle_play(parameters: dict, player) -> str:
     query = parameters.get("query", "").strip()

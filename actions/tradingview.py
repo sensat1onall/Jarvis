@@ -79,25 +79,19 @@ def _parse_points(text: str) -> list:
     return [(int(a), int(b)) for a, b in pairs]
 
 
-def _vision_points(tool: str, where: str, w: int, h: int):
-    """Screenshot → vision model → anchor points.  Returns a list of points,
-    'NO_CHART', or None (vision unavailable/failed)."""
+def _vision_points(b64: str, w: int, h: int, tool: str, where: str):
+    """Cropped TradingView-window screenshot (b64, w×h) → vision model → anchor
+    points in CROP coords.  Returns a list of points, 'NO_CHART', or None."""
     try:
-        import pyautogui
         from core.llm_client import call_vision
-        img = pyautogui.screenshot()
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        b64 = base64.b64encode(buf.getvalue()).decode("ascii")
         spec = _TOOL_SPECS.get(tool, _TOOL_SPECS["trend"])
         n    = spec["points"]
         prompt = (
-            f"This is a {w}x{h} pixel screenshot of the user's screen. "
-            f"If a TradingView candlestick chart is visible, give pixel coordinates "
-            f"to draw a {spec['desc']} {where}. "
+            f"This is a {w}x{h} pixel screenshot of a TradingView chart window. "
+            f"Give pixel coordinates to draw a {spec['desc']} {where}. "
             f"Reply ONLY with {'one point as: x,y' if n == 1 else 'two points as: x1,y1;x2,y2 (left point first)'}. "
-            f"Points must be INSIDE the chart plot area (not on toolbars). "
-            f"If no TradingView chart is visible, reply exactly: NO_CHART"
+            f"Points must be INSIDE the chart plot area (not on the toolbars). "
+            f"If no candlestick chart is visible, reply exactly: NO_CHART"
         )
         text = call_vision(b64, prompt, mime="image/png", timeout=40)
         if "NO_CHART" in (text or "").upper():
@@ -130,7 +124,7 @@ def _draw(tool: str, where: str, player=None) -> str:
     except ImportError:
         return "pyautogui is not installed — cannot draw."
 
-    from actions.computer_control import _focus_window
+    from actions.computer_control import _focus_window, capture_window
     fr = _focus_window("TradingView")
     if not fr.startswith("Focused window:"):
         fr = _focus_window("Chrome")
@@ -138,17 +132,23 @@ def _draw(tool: str, where: str, player=None) -> str:
             return "No Chrome window with TradingView found — open the chart first."
     time.sleep(0.7)
 
-    w, h = pyautogui.size()
+    cap = capture_window("TradingView") or capture_window("Chrome")
+    if not cap:
+        return "Could not capture the TradingView window — open the chart first."
+    b64, ox, oy, ww, wh = cap          # window crop + offset + window size
+
     where = where or _DEFAULT_WHERE.get(tool, "")
-    pts = _vision_points(tool, where, w, h)
+    pts = _vision_points(b64, ww, wh, tool, where)   # points in CROP coords
     if pts == "NO_CHART":
         return "No TradingView chart is visible in Chrome — open the chart first."
     used_vision = bool(pts)
     if not pts:
-        pts = _fallback_points(w, h, tool)
-    pts = [_clamp(p, w, h) for p in pts][: spec["points"]]
+        pts = _fallback_points(ww, wh, tool)
+    pts = [_clamp(p, ww, wh) for p in pts][: spec["points"]]
     while len(pts) < spec["points"]:
-        pts.append(_fallback_points(w, h, tool)[-1])
+        pts.append(_fallback_points(ww, wh, tool)[-1])
+    # crop coords → absolute screen coords (add the window's top-left offset)
+    pts = [(p[0] + ox, p[1] + oy) for p in pts]
 
     if player:
         try:
@@ -210,16 +210,17 @@ def _focus_chart() -> str:
 
 
 def _vision_find(description: str):
-    """Screenshot → vision model → a single (x, y) for a UI element, or None."""
+    """Crop the TradingView/Chrome window → vision model → a single (x, y) in
+    ABSOLUTE screen coords (crop coord + window offset), or None."""
     try:
-        import pyautogui
         from core.llm_client import call_vision
-        img = pyautogui.screenshot()
-        buf = io.BytesIO(); img.save(buf, format="PNG")
-        b64 = base64.b64encode(buf.getvalue()).decode("ascii")
-        w, h = pyautogui.size()
+        from actions.computer_control import capture_window
+        cap = capture_window("TradingView") or capture_window("Chrome")
+        if not cap:
+            return None
+        b64, ox, oy, w, h = cap
         prompt = (
-            f"This is a {w}x{h} screenshot of TradingView open in a browser. "
+            f"This is a {w}x{h} screenshot of a TradingView browser window. "
             f"Give the pixel coordinates of {description}. "
             f"Reply with ONLY the coordinates as: x,y . If not visible, reply: NOT_FOUND"
         )
@@ -227,7 +228,7 @@ def _vision_find(description: str):
         if "NOT_FOUND" in (text or "").upper():
             return None
         m = re.search(r"(\d{2,5})\s*,\s*(\d{2,5})", text or "")
-        return (int(m.group(1)), int(m.group(2))) if m else None
+        return (int(m.group(1)) + ox, int(m.group(2)) + oy) if m else None
     except Exception as e:
         print(f"[TradingView] vision_find failed: {e}")
         return None

@@ -1,51 +1,42 @@
-import webbrowser
-from urllib.parse import quote_plus
+"""
+weather_report.py — fetch the live weather as TEXT (so JARVIS can SPEAK it),
+via wttr.in (free, no API key).  Falls back to opening a Google weather search
+in the browser only if the fetch fails.
+"""
+import urllib.request as _u
+from urllib.parse import quote, quote_plus
 
 
-def weather_action(
-    parameters: dict,
-    player=None,
-    session_memory=None,
-) -> str:
-    city     = parameters.get("city")
-    when     = parameters.get("time", "today")  
-
-    if not city or not isinstance(city, str) or not city.strip():
-        msg = "Sir, the city is missing for the weather report."
-        _log(msg, player)
-        return msg
-
-    city = city.strip()
-    when = (when or "today").strip()
-
-    search_query  = f"weather in {city} {when}"
-    url           = f"https://www.google.com/search?q={quote_plus(search_query)}"
-
-    try:
-        opened = webbrowser.open(url)
-        if not opened:
-            raise RuntimeError("webbrowser.open returned False")
-    except Exception as e:
-        msg = f"Sir, I couldn't open the browser for the weather report: {e}"
-        _log(msg, player)
-        return msg
-
-    msg = f"Showing the weather for {city}, {when}, sir."
-    _log(msg, player)
-
-    if session_memory:
-        try:
-            session_memory.set_last_search(query=search_query, response=msg)
-        except Exception:
-            pass
-
-    return msg
+def _wttr(city: str) -> str:
+    # wttr.in returns the formatted one-liner only for curl-like clients.
+    url = (f"https://wttr.in/{quote(city)}"
+           f"?format=%l:+%c+%C,+%t+(feels+%f),+wind+%w,+humidity+%h&m")
+    req = _u.Request(url, headers={"User-Agent": "curl/8.0"})
+    with _u.urlopen(req, timeout=12) as r:
+        return r.read().decode("utf-8", "replace").strip()
 
 
-def _log(message: str, player=None) -> None:
-    print(f"[Weather] {message}")
+def weather_action(parameters: dict, player=None, session_memory=None) -> str:
+    city = (parameters.get("city") or "").strip() or "Tashkent"
+    when = (parameters.get("time") or "").strip()
     if player:
-        try:
-            player.write_log(f"JARVIS: {message}")
-        except Exception:
-            pass
+        try: player.write_log(f"[weather] {city}")
+        except Exception: pass
+
+    # Live fetch first — so the assistant can actually tell the user the weather.
+    try:
+        txt = _wttr(city)
+        bad = (not txt) or ("Unknown location" in txt) or ("Sorry" in txt) or txt.count("%") > 2
+        if not bad:
+            return f"Weather — {txt}"
+    except Exception as e:
+        print(f"[Weather] wttr.in failed: {e}")
+
+    # Fallback: open a Google weather search in the browser.
+    try:
+        import webbrowser
+        q = f"weather in {city} {when}".strip()
+        webbrowser.open(f"https://www.google.com/search?q={quote_plus(q)}")
+        return f"I opened the weather for {city} in the browser."
+    except Exception as e:
+        return f"Could not get the weather for {city}: {e}"

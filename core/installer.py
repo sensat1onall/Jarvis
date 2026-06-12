@@ -35,6 +35,7 @@ _CORE: list[tuple[str, str]] = [
     ("youtube_transcript_api", "youtube-transcript-api"),
     ("pandas",             "pandas"),
     ("openpyxl",           "openpyxl"),
+    ("yt_dlp",             "yt-dlp"),
 ]
 
 # Windows-only (pywinauto, pycaw, win10toast, comtypes)
