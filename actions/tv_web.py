@@ -3,11 +3,12 @@ tv_web.py — control TradingView in a dedicated, JARVIS-driven Chrome (web) via
 Playwright/CDP.  Reliable DOM + keyboard control (replaces the brittle
 vision-clicking of the old tradingview.py for charting):
 
-  open       — open a symbol's chart            (URL ?symbol=)
-  timeframe  — change the interval              (URL &interval=)
-  indicator  — add a study (RSI, MACD, MA…)     (Indicators dialog)
-  draw       — pick a drawing tool via TradingView HOTKEY, place on the canvas
-  read       — current symbol / interval / price (DOM)
+  open             — open a symbol's chart            (URL ?symbol=)
+  timeframe        — change the interval              (URL &interval=)
+  indicator        — add a study (RSI, MACD, SAR…)    (Indicators dialog)
+  remove_indicator — remove a study by name, or 'all' (charting API)
+  draw             — pick a drawing tool via TradingView HOTKEY, place on canvas
+  read             — current symbol / interval / price (DOM)
 
 One persistent, visible browser window is reused across calls.  A dedicated
 profile (~/.jarvis_profiles/tradingview) keeps the TradingView login and avoids
@@ -101,6 +102,13 @@ _IND_NAMES = {
     "stoch": "Stochastic", "stochastic": "Stochastic",
     "atr": "Average True Range", "adx": "Average Directional Index",
     "vwap": "VWAP", "volume": "Volume", "ichimoku": "Ichimoku Cloud",
+    # Parabolic SAR + other common studies
+    "sar": "Parabolic SAR", "psar": "Parabolic SAR", "parabolic": "Parabolic SAR",
+    "supertrend": "Supertrend", "cci": "Commodity Channel Index",
+    "mfi": "Money Flow Index", "obv": "On Balance Volume",
+    "williams": "Williams %R", "momentum": "Momentum",
+    "donchian": "Donchian Channels", "keltner": "Keltner Channels",
+    "pivot": "Pivot Points Standard",
 }
 
 
@@ -290,12 +298,25 @@ class _TVSession:
             self._browser = await self._connect_or_launch()
             self._ctx = (self._browser.contexts[0] if self._browser.contexts
                          else await self._browser.new_context())
-            pages = self._ctx.pages
-            self._page = (next((p for p in pages if "tradingview.com" in (p.url or "")), None)
-                          or (pages[0] if pages else await self._ctx.new_page()))
+            self._page = None
+        # (Re)pick a page only when we don't already hold a live one — this keeps
+        # the "new tab per analysis" tab sticky across follow-up actions (indicator,
+        # draw, remove) instead of jumping back to an older chart tab.
         if self._page is None or self._page.is_closed():
-            pages = self._ctx.pages
-            self._page = pages[-1] if pages else await self._ctx.new_page()
+            pages = [p for p in self._ctx.pages if not p.is_closed()]
+            self._page = (next((p for p in pages if "tradingview.com" in (p.url or "")), None)
+                          or (pages[-1] if pages else await self._ctx.new_page()))
+            # NEVER leave the user staring at a blank tab ("opened a blank screen,
+            # nothing happened"): send any non-TradingView tab to the default chart.
+            if "tradingview.com" not in (self._page.url or ""):
+                try:
+                    await self._page.goto(
+                        "https://www.tradingview.com/chart/?symbol=OANDA%3AXAUUSD",
+                        wait_until="domcontentloaded", timeout=30000)
+                    await self._wait_api()
+                    await self._dismiss_popups()
+                except Exception:
+                    pass
         return self._page
 
     async def _read(self, sel: str) -> str:
@@ -451,6 +472,25 @@ class _TVSession:
     async def add_indicator(self, name: str) -> str:
         page = await self._ensure_page()
         canon = _IND_NAMES.get((name or "").lower().strip(), name)
+        # FAST + RELIABLE path: add the built-in study via the charting API — one
+        # call, no toolbar dialog / promo-popup / close-X fragility (verified live).
+        if await self._wait_api():
+            try:
+                js = r"""(nm) => { try {
+                  window.TradingViewApi.activeChart().createStudy(nm, false, false);
+                  return true; } catch(e){ return false; } }"""
+                if await page.evaluate(js, canon):
+                    await asyncio.sleep(0.9)          # createStudy resolves a Promise
+                    present = await page.evaluate(
+                        "(nm)=>{try{return (window.TradingViewApi.activeChart().getAllStudies()||[])"
+                        ".some(function(s){return (s.name||'').toLowerCase().indexOf(nm.toLowerCase())!==-1;});}"
+                        "catch(e){return false;}}", canon)
+                    if present:
+                        return f"Added indicator: {canon}."
+            except Exception:
+                pass
+        # FALLBACK: the Indicators dialog (toolbar) — for names createStudy rejects
+        # (e.g. community scripts not in the built-in registry).
         try:
             # '/' opens the Indicators dialog; search the canonical name and click
             # the row that MATCHES it (so we add the indicator, not an "X Strategy").
@@ -467,6 +507,42 @@ class _TVSession:
             return f"Added indicator: {canon}."
         except Exception as e:
             return f"Could not add indicator '{name}': {e}"
+
+    async def remove_indicator(self, name: str) -> str:
+        """Remove a study from the chart by name (e.g. 'RSI'), or all of them with
+        name='all'.  Uses the charting API getAllStudies()/removeEntity() — the
+        same family as removeAllShapes used by clear()."""
+        page = await self._ensure_page()
+        if not await self._wait_api():
+            return "Chart data is still loading — try again in a moment."
+        canon = _IND_NAMES.get((name or "").lower().strip(), name or "")
+        js = r"""(target) => {
+          const ch = window.TradingViewApi.activeChart();
+          let studies = [];
+          try { studies = ch.getAllStudies() || []; }
+          catch(e){ return {ok:false, err:'getAllStudies: '+e}; }
+          const present = studies.map(function(s){ return s.name; });
+          const t = (target||'').toLowerCase().trim();
+          const all = !t || t==='all' || t==='hammasi' || t==='barcha';
+          const hits = all ? studies : studies.filter(function(s){
+            return (s.name||'').toLowerCase().indexOf(t) !== -1; });
+          let n = 0;
+          hits.forEach(function(s){ try { ch.removeEntity(s.id); n++; } catch(e){} });
+          return {ok:true, removed:n, names:hits.map(function(s){return s.name;}), present:present};
+        }"""
+        try:
+            r = await page.evaluate(js, canon)
+            # if the canonical title didn't match a study, retry with the short alias
+            if r and r.get("ok") and not r.get("removed") and name and canon != name:
+                r = await page.evaluate(js, name)
+            if not (r and r.get("ok")):
+                return f"Could not remove '{name}': {(r or {}).get('err', '?')}"
+            if r.get("removed"):
+                return f"Removed indicator: {', '.join(r.get('names') or [name])}."
+            present = ", ".join(r.get("present") or []) or "none"
+            return f"No '{name}' indicator on the chart (present: {present})."
+        except Exception as e:
+            return f"Could not remove indicator '{name}': {e}"
 
     async def _chart_box(self):
         for sel in ("table.chart-markup-table", "canvas"):
@@ -592,6 +668,8 @@ def tradingview_web(parameters: dict = None, response=None, player=None,
             return s.run(s.set_timeframe(p.get("value", "1h")), timeout=50)
         if action == "indicator":
             return s.run(s.add_indicator(p.get("name", "RSI")), timeout=40)
+        if action in ("remove_indicator", "delete_indicator", "remove_study"):
+            return s.run(s.remove_indicator(p.get("name", "")), timeout=40)
         if action == "draw":
             return s.run(s.draw(p.get("tool", "trend")), timeout=40)
         if action in ("clear", "clear_drawings", "clean"):

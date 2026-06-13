@@ -233,17 +233,19 @@ TOOL_DECLARATIONS = [
             "strategy='sr' → Magic-Line support/resistance zones. Pass symbol and value=timeframe. "
             "E.g. 'open gold 15m and analyze with trend lines' → action=analyze, symbol=gold, value=15m, "
             "strategy=trend. Other actions: 'open' (open chart only, new tab), 'timeframe', "
-            "'indicator' (name=RSI/MACD…), 'draw' (manual single tool), 'read'."
+            "'indicator' (ADD a study, name=RSI/MACD/SAR…), 'remove_indicator' (DELETE a study, "
+            "name=RSI or name=all), 'draw' (manual single tool), 'read'. To SWAP indicators "
+            "(e.g. 'delete RSI and add SAR') call remove_indicator name=RSI then indicator name=SAR."
         ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "action":   {"type": "STRING", "description": "analyze | open | timeframe | indicator | draw | read"},
+                "action":   {"type": "STRING", "description": "analyze | open | timeframe | indicator | remove_indicator | draw | read"},
                 "symbol":   {"type": "STRING", "description": "Chart symbol: gold/XAUUSD, bitcoin/BTCUSD, EURUSD, ethereum…"},
                 "strategy": {"type": "STRING", "description": "For analyze: 'trend' (trend lines) | 'sr' (support/resistance zones)"},
                 "value":    {"type": "STRING", "description": "Timeframe: 1m,5m,15m,30m,1h,4h,1D,1W"},
                 "tool":     {"type": "STRING", "description": "For manual draw: trend | level | fib | vline"},
-                "name":     {"type": "STRING", "description": "For indicator: RSI, MACD, Moving Average, Bollinger Bands…"},
+                "name":     {"type": "STRING", "description": "Indicator name for indicator/remove_indicator: RSI, MACD, SAR, Bollinger Bands… (or 'all' to remove every study)"},
             },
             "required": ["action"]
         }
