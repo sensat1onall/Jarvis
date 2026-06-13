@@ -226,24 +226,24 @@ TOOL_DECLARATIONS = [
     {
         "name": "tradingview",
         "description": (
-            "TradingView chart control in the user's own Chrome. "
-            "action='open' opens the chart for a symbol (GOLD/oltin → XAUUSD default) as a new "
-            "Chrome tab — after opening, ASK which strategy to draw. "
-            "action='timeframe' sets the chart interval (value=1m/5m/15m/30m/1h/4h/1D/1W). "
-            "action='indicator' adds an indicator (name=RSI/MACD/Moving Average/Bollinger Bands…). "
-            "action='draw' draws ONE object: tool='trend' (trend line), 'level' (support/resistance), "
-            "'fib' (Fibonacci), 'vline' (vertical). Call draw once per object — a strategy needing "
-            "several lines = several draw calls. 'where' describes placement, e.g. 'recent swing lows'."
+            "Control TradingView in a dedicated window JARVIS drives; each analysis opens in a NEW TAB "
+            "so earlier charts are kept. MAIN USE — action='analyze': opens a symbol and AUTOMATICALLY "
+            "draws a full strategy analysis from the real chart data at the exact swing points. "
+            "strategy='trend' → proper trend lines on real swing highs/lows (classic/DFX method); "
+            "strategy='sr' → Magic-Line support/resistance zones. Pass symbol and value=timeframe. "
+            "E.g. 'open gold 15m and analyze with trend lines' → action=analyze, symbol=gold, value=15m, "
+            "strategy=trend. Other actions: 'open' (open chart only, new tab), 'timeframe', "
+            "'indicator' (name=RSI/MACD…), 'draw' (manual single tool), 'read'."
         ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "action": {"type": "STRING", "description": "open | timeframe | indicator | draw"},
-                "symbol": {"type": "STRING", "description": "Chart symbol: XAUUSD (gold), BTCUSD, EURUSD…"},
-                "tool":   {"type": "STRING", "description": "For draw: trend | level | fib | vline"},
-                "where":  {"type": "STRING", "description": "For draw: where to place it, e.g. 'recent swing lows'"},
-                "value":  {"type": "STRING", "description": "For timeframe: 1m,5m,15m,30m,1h,4h,1D,1W"},
-                "name":   {"type": "STRING", "description": "For indicator: RSI, MACD, Moving Average, Bollinger Bands…"},
+                "action":   {"type": "STRING", "description": "analyze | open | timeframe | indicator | draw | read"},
+                "symbol":   {"type": "STRING", "description": "Chart symbol: gold/XAUUSD, bitcoin/BTCUSD, EURUSD, ethereum…"},
+                "strategy": {"type": "STRING", "description": "For analyze: 'trend' (trend lines) | 'sr' (support/resistance zones)"},
+                "value":    {"type": "STRING", "description": "Timeframe: 1m,5m,15m,30m,1h,4h,1D,1W"},
+                "tool":     {"type": "STRING", "description": "For manual draw: trend | level | fib | vline"},
+                "name":     {"type": "STRING", "description": "For indicator: RSI, MACD, Moving Average, Bollinger Bands…"},
             },
             "required": ["action"]
         }
@@ -1289,7 +1289,9 @@ class JarvisLocal:
                 result = r or "Done."
 
             elif name == "tradingview":
-                from actions.tradingview import tradingview as _tv
+                # CDP/Playwright control of TradingView web (reliable DOM/keyboard);
+                # replaces the old vision-clicking actions/tradingview.py.
+                from actions.tv_web import tradingview_web as _tv
                 r = _tv(parameters=args, player=self.ui, speak=self.speak)
                 result = r or "Done."
 

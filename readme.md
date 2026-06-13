@@ -90,7 +90,7 @@ Ba’zi natijalar (qidiruv, ekran tahlili, grafik chizish) ikkinchi LLM bosqichi
 |-------|-----------------|--------|
 | 🚀 **Ilova ochish** | “Chrome’ni och”, “Spotify’ni ishga tushir” | Istalgan ilova yoki saytni ochadi |
 | 🌐 **Brauzer** | “… ni qidir”, “Instagram’ni och” | Mavjud Chrome’ingizda **yangi tab** (yangi oyna emas) |
-| 📈 **Trading (TradingView)** | “oltin grafigini och”, “15 daqiqalik qil”, “RSI qo‘sh”, “trend chiz” | Grafik ochadi (XAUUSD…), timeframe’ni o‘zgartiradi, indikator qo‘shadi, trend / fib / support-resistance chizadi |
+| 📈 **Trading tahlili (TradingView)** | “oltinni 15 daqiqada och va trend hamda support-resistance bilan tahlil qil” | Grafikni ochib **strategiya bo‘yicha avtomatik tahlil** qiladi: trend chiziq tuzilmasi (A–F swing nuqtalari + yo‘nalish o‘qi) va Magic-Line support/resistance zonalari — barchasi haqiqiy narx nuqtalaridan (TradingView grafik API orqali). Har tahlil **yangi tabda**; “grafikni tozala” chizmalarni o‘chiradi |
 | 💬 **Xabar yuborish** | “Ali’ga Telegram’da salom deb yoz” | Xabar yuboradi — ochiq ilovani ishlatadi, qayta ochmaydi |
 | 📥 **Xabarni o‘qish** | “Ali nima dedi?” | Kelgan oxirgi xabarlarni ovoz bilan o‘qib beradi |
 | 📸 **Skrinshot** | “skrinshot ol”, “Chrome ekranini ol”, “2-monitorni ol” | To‘liq ekran, **ko‘p monitorni biladi**, Pictures’ga saqlaydi |
@@ -111,6 +111,8 @@ Ba’zi natijalar (qidiruv, ekran tahlili, grafik chizish) ikkinchi LLM bosqichi
 | 🎮 **O‘yinlar** | “Steam o‘yinlarimni yangila” | Steam / Epic o‘rnatish va yangilash |
 | 🧠 **Xotira** | “mening ismim Ali”, “Toshkentda yashayman” | Shaxsiy faktlarni eslab qoladi; uzun suhbatlarni fonda umumlashtiradi |
 | 📜 **Faoliyat tarixi** | **📜 TARIX** tugmasi (HUD) | Bajarilgan barcha amallar tarixi — jonli qidiruv bilan |
+
+> **📈 TradingView tahlili — bir martalik sozlash:** `tv_chrome.bat` ni ishga tushiring, ochilgan toza Chrome’da TradingView’ga **bir marta login qiling** va o‘sha oynani ochiq qoldiring. JARVIS shu oynaga CDP orqali ulanib grafikni boshqaradi (chizish TradingView’ning o‘z grafik API’si bilan — aniq narx nuqtalarida). Har tahlil yangi tabda ochiladi.
 
 ---
 
