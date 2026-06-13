@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import os
 import queue as _queue
+import re
 import threading
 from typing import Callable, Optional
 
@@ -95,6 +96,19 @@ def _play_samples(samples, sample_rate: int) -> None:
     """
     import sys
     arr = np.asarray(_to_numpy(samples), dtype=np.float32).flatten()
+    # ── De-click ───────────────────────────────────────────────────────────
+    # Kill the "pop/thud" heard right before speech: ramp the first/last ~8 ms
+    # from silence (so the buffer never starts on a hard step) and prepend ~45 ms
+    # of silence so the speaker's start-up pop lands in the silence, not on the
+    # first word.
+    sr = int(sample_rate)
+    if arr.size:
+        fade = max(1, int(sr * 0.008))
+        if arr.size > 2 * fade:
+            ramp = np.linspace(0.0, 1.0, fade, dtype=np.float32)
+            arr[:fade] *= ramp
+            arr[-fade:] *= ramp[::-1]
+        arr = np.concatenate([np.zeros(int(sr * 0.045), dtype=np.float32), arr])
     if sys.platform == "win32":
         try:
             import io, wave, winsound
@@ -143,14 +157,30 @@ def stop_playback() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Uzbek o'/g' normalizer
+# ---------------------------------------------------------------------------
+# Uzbek "oʻ" and "gʻ" use the modifier-letter ʻ (U+02BB).  Microsoft's uz-UZ
+# voice only pronounces them correctly with that exact character — fed a plain
+# apostrophe (' ' ` ´ ʼ) it drops the modification and says bare "o"/"g".
+# Convert any apostrophe variant *after o/O/g/G* to U+02BB.  Other apostrophes
+# (the tutuq belgisi in "ma'no", "san'at") are left untouched.
+_UZ_OQ_RE = re.compile("([oOgG])['’‘ʼ`´]")
+
+
+def _normalize_uz_oq(text: str) -> str:
+    return _UZ_OQ_RE.sub(lambda m: m.group(1) + "ʻ", text)
+
+
+# ---------------------------------------------------------------------------
 # Engines
 # ---------------------------------------------------------------------------
 
 class EdgeTTSEngine:
     """Microsoft EdgeTTS – free, requires internet."""
 
-    def __init__(self, voice: str = "en-US-GuyNeural"):
+    def __init__(self, voice: str = "en-US-GuyNeural", rate: str = "+0%"):
         self.voice = voice
+        self.rate = rate or "+0%"           # e.g. "+20%" = 1.2x faster
 
     def speak(self, text: str) -> None:
         loop = asyncio.new_event_loop()
@@ -163,7 +193,9 @@ class EdgeTTSEngine:
 
     async def _synth(self, text: str) -> bytes:
         import edge_tts
-        comm = edge_tts.Communicate(text, self.voice)
+        if self.voice.lower().startswith("uz"):
+            text = _normalize_uz_oq(text)      # oʻ/gʻ -> U+02BB so Sardor says them right
+        comm = edge_tts.Communicate(text, self.voice, rate=self.rate)
         buf  = bytearray()
         async for chunk in comm.stream():
             if chunk["type"] == "audio":
@@ -520,5 +552,6 @@ def create_tts_player(config: dict) -> TTSPlayer:
         engine  = MuxlisaTTSEngine(api_key=api_key, speaker=speaker)
     else:   # edgetts (default)
         voice  = config.get("tts_voice", "en-US-GuyNeural")
-        engine = EdgeTTSEngine(voice=voice)
+        rate   = config.get("tts_rate", "+0%")
+        engine = EdgeTTSEngine(voice=voice, rate=rate)
     return TTSPlayer(engine)

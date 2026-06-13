@@ -28,6 +28,35 @@ from urllib.parse import quote
 # the one-time login captcha is human-solvable. Override the port via TV_CDP_PORT.
 _CDP_PORT = os.environ.get("TV_CDP_PORT", "9222")
 _CDP_URL = f"http://127.0.0.1:{_CDP_PORT}"
+_TV_PROFILE = str(Path.home() / ".jarvis_profiles" / "tv_chrome")
+
+
+def _launch_debug_chrome() -> bool:
+    """Auto-launch a clean Chrome on the CDP port with the dedicated TradingView
+    profile (same as tv_chrome.bat) when one isn't already running — so the user
+    doesn't have to start it manually. The profile keeps their TradingView login."""
+    import subprocess
+    cands = [
+        os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"),
+                     "Google", "Chrome", "Application", "chrome.exe"),
+        os.path.join(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"),
+                     "Google", "Chrome", "Application", "chrome.exe"),
+        os.path.join(os.environ.get("LOCALAPPDATA", ""),
+                     "Google", "Chrome", "Application", "chrome.exe"),
+    ]
+    chrome = next((c for c in cands if c and os.path.exists(c)), None)
+    if not chrome:
+        return False
+    try:
+        subprocess.Popen(
+            [chrome, f"--remote-debugging-port={_CDP_PORT}", f"--user-data-dir={_TV_PROFILE}",
+             "--no-first-run", "--no-default-browser-check",
+             "https://www.tradingview.com/chart/?symbol=OANDA%3AXAUUSD"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True
+    except Exception:
+        return False
+
 
 from playwright.async_api import async_playwright, Playwright, BrowserContext, Page
 
@@ -237,17 +266,28 @@ class _TVSession:
         return asyncio.run_coroutine_threadsafe(coro, self._loop).result(timeout=timeout)
 
     # -- browser (ATTACH to the user's clean Chrome via CDP) --
+    async def _connect_or_launch(self):
+        try:
+            return await self._pw.chromium.connect_over_cdp(_CDP_URL)
+        except Exception:
+            pass
+        # not running — auto-launch the dedicated debug Chrome, then retry connect
+        if not _launch_debug_chrome():
+            raise RuntimeError("Chrome topilmadi — TradingView'ni ocholmadim.")
+        for _ in range(30):                       # wait up to ~30 s for it to come up
+            await asyncio.sleep(1)
+            try:
+                return await self._pw.chromium.connect_over_cdp(_CDP_URL)
+            except Exception:
+                continue
+        raise RuntimeError("TradingView Chrome ishga tushmadi — tv_chrome.bat ni qo'lda oching.")
+
     async def _ensure_page(self) -> Page:
         # reconnect if the user's Chrome window was closed
         if self._browser is not None and not self._browser.is_connected():
             self._ctx = self._page = self._browser = None
         if self._ctx is None:
-            try:
-                self._browser = await self._pw.chromium.connect_over_cdp(_CDP_URL)
-            except Exception:
-                raise RuntimeError(
-                    "TradingView Chrome topilmadi. Avval _tv_chrome.bat ni ishga "
-                    "tushiring (bir marta login qiling) va o'sha oynani ochiq qoldiring.")
+            self._browser = await self._connect_or_launch()
             self._ctx = (self._browser.contexts[0] if self._browser.contexts
                          else await self._browser.new_context())
             pages = self._ctx.pages
@@ -544,10 +584,10 @@ def tradingview_web(parameters: dict = None, response=None, player=None,
             sym = p.get("symbol", "")
             opened = ""
             if sym:
-                opened = s.run(s.open(sym, p.get("value") or p.get("interval"), True), timeout=85) + " "
-            return opened + s.run(s.analyze(p.get("strategy") or p.get("tool") or "trend"), timeout=70)
+                opened = s.run(s.open(sym, p.get("value") or p.get("interval"), True), timeout=115) + " "
+            return opened + s.run(s.analyze(p.get("strategy") or p.get("tool") or "trend"), timeout=75)
         if action == "open":
-            return s.run(s.open(p.get("symbol", ""), p.get("value") or p.get("interval")), timeout=70)
+            return s.run(s.open(p.get("symbol", ""), p.get("value") or p.get("interval")), timeout=105)
         if action in ("timeframe", "interval"):
             return s.run(s.set_timeframe(p.get("value", "1h")), timeout=50)
         if action == "indicator":
