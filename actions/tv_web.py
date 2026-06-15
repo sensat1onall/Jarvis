@@ -167,7 +167,18 @@ _JS_TRENDLINE = r"""() => {
   }
   if(piv.length<3){ piv=zz((maxP-minP)*0.025); }      // too few — try finer
   if(piv.length<3) return {ok:false, err:'not enough significant swings ('+piv.length+')'};
-  const last = piv.slice(-6), L=['A','B','C','D','E','F'];
+  // guarantee the labelled structure spans at least ~22 recent candles, so A–F
+  // covers the last ~20–25 bars instead of being crammed into the last 10–15.
+  const L=['A','B','C','D','E','F'], MIN_REACH=22;
+  let last = piv.slice(-6);
+  if(last.length>=2 && (last[last.length-1].i - last[0].i) < MIN_REACH){
+    const endI=last[last.length-1].i, aStart=Math.max(0, endI-26);
+    let hiI=aStart,hiP=bars[aStart][2], loI=aStart,loP=bars[aStart][3];
+    for(let i=aStart;i<last[0].i;i++){ if(bars[i][2]>hiP){hiP=bars[i][2];hiI=i;} if(bars[i][3]<loP){loP=bars[i][3];loI=i;} }
+    const _anchor = last[0].type==='H' ? {i:loI,t:bars[loI][0],p:loP,type:'L'}
+                                       : {i:hiI,t:bars[hiI][0],p:hiP,type:'H'};
+    if(_anchor.i < last[0].i) last = [_anchor].concat(piv.slice(-5));
+  }
   // label each pivot at its exact turning point
   for(let k=0;k<last.length;k++){ try {
     ch.createShape({time:last[k].t, price:last[k].p},
@@ -189,10 +200,16 @@ _JS_TRENDLINE = r"""() => {
     else if(lh&&hl){ dir='triangle'; }
     else dir='range';
   }
-  // dominant trend line (support along lows / resistance along highs)
+  // dominant trend line (support along lows / resistance along highs) — FINITE:
+  // from the first pivot through the second, projected only ~20 candles forward
+  // (no endless extendRight).
   if(mainPts){ try {
-    ch.createMultipointShape([{time:mainPts[0].t,price:mainPts[0].p},{time:mainPts[1].t,price:mainPts[1].p}],
-      {shape:'trend_line', overrides:{linecolor:'#2962ff', linewidth:2, extendRight:true}});
+    const _bdt=(bars[bars.length-1][0]-bars[0][0])/Math.max(1,bars.length-1);
+    const _slope=(mainPts[1].p-mainPts[0].p)/Math.max(1e-9,(mainPts[1].t-mainPts[0].t));
+    const _endT=mainPts[1].t + _bdt*20;
+    const _endP=mainPts[1].p + _slope*(_endT-mainPts[1].t);
+    ch.createMultipointShape([{time:mainPts[0].t,price:mainPts[0].p},{time:_endT,price:_endP}],
+      {shape:'trend_line', overrides:{linecolor:'#2962ff', linewidth:2}});
   } catch(e){} }
   // next-direction projection arrow
   const nextUp = dir==='uptrend' ? true : (dir==='downtrend' ? false : (bars[bars.length-1][4]>=bars[0][4]));
@@ -424,6 +441,14 @@ class _TVSession:
         page = await self._ensure_page()
         if not await self._wait_api():
             return "Chart data is still loading — try again in a moment."
+        # Re-analysis starts clean: wipe any prior drawings on THIS chart so repeated
+        # 'analyze' (or 'clear and re-analyze') never stacks shapes. Only the active tab
+        # is touched — other analysis tabs keep their drawings. On a freshly opened tab
+        # this is a harmless no-op.
+        try:
+            await page.evaluate("()=>{try{window.TradingViewApi.activeChart().removeAllShapes();}catch(e){}}")
+        except Exception:
+            pass
         st = (strategy or "trend").lower().strip()
         want_sr    = any(w in st for w in ("sr", "support", "resist", "zone", "snr", "magic", "both", "all"))
         want_trend = any(w in st for w in ("trend", "line", "classic", "structure", "swing", "both", "all"))
