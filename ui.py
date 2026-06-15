@@ -72,6 +72,27 @@ class C:
 def qcol(h: str, a: int = 255) -> QColor:
     c = QColor(h); c.setAlpha(a); return c
 
+
+def _hsl(h: float, s: float, l: float, a: int = 255) -> QColor:
+    """HSL (h in degrees, s/l in 0..1) -> QColor with alpha 0..255."""
+    c = QColor.fromHslF((h % 360) / 360.0,
+                        max(0.0, min(1.0, s)), max(0.0, min(1.0, l)))
+    c.setAlpha(max(0, min(255, int(a))))
+    return c
+
+
+def _fib_sphere(n: int) -> list[tuple[float, float, float]]:
+    """Evenly distributed unit-sphere points (the plasma shell fragments)."""
+    pts, ga = [], math.pi * (3 - math.sqrt(5))      # golden angle
+    denom = max(1, n - 1)
+    for i in range(n):
+        y = 1 - (i / float(denom)) * 2
+        radius = math.sqrt(max(0.0, 1 - y * y))
+        theta = ga * i
+        pts.append((math.cos(theta) * radius, y, math.sin(theta) * radius))
+    return pts
+
+
 class _SysMetrics:
     def __init__(self):
         self.cpu  = 0.0
@@ -277,6 +298,18 @@ class HudCanvas(QWidget):
         self._face_px: QPixmap | None = None
         self._load_face(face_path)
 
+        # --- plasma energy core (jarvis_orb port) — the centre icon -------
+        self._orb_pts    = _fib_sphere(120)
+        self._orb_flick  = [random.random() * math.tau for _ in self._orb_pts]
+        self._orb_square = [random.random() < 0.30 for _ in self._orb_pts]
+        self._orb_spin   = 0.0
+        self._orb_t      = 0.0
+        self._orb_amp    = 0.0          # smoothed voice amplitude 0..1
+        self._orb_rings: list[list[float]] = []   # [progress, alpha] ripples
+        self._orb_ring_t = 0.0
+        self._orb_last   = time.time()
+        self._orb_st     = self._orb_style()   # style cached per frame in _step
+
         self._tmr = QTimer(self)
         self._tmr.timeout.connect(self._step)
         self._tmr.start(16)
@@ -349,6 +382,30 @@ class HudCanvas(QWidget):
         if self._blink_tick >= 38:
             self._blink = not self._blink
             self._blink_tick = 0
+
+        # --- plasma core animation -------------------------------------
+        o_now = time.time()
+        dt = o_now - self._orb_last
+        self._orb_last = o_now
+        dt = 0.0 if dt < 0 else (0.05 if dt > 0.05 else dt)
+        ost = self._orb_st = self._orb_style()
+        self._orb_t    += dt
+        self._orb_spin += ost["spin"] * dt
+        target_amp = 0.0
+        if self.speaking:
+            target_amp = 0.45 + 0.45 * abs(math.sin(self._orb_t * 9.0)) \
+                         * random.uniform(0.5, 1.0)
+        self._orb_amp += (target_amp - self._orb_amp) * min(1.0, dt * 14)
+        if ost["ring_rate"] > 0:
+            self._orb_ring_t += dt
+            if self._orb_ring_t >= ost["ring_rate"]:
+                self._orb_ring_t = 0.0
+                self._orb_rings.append([0.0, 1.0])
+        for rg in self._orb_rings:
+            rg[0] += dt * 1.0
+            rg[1] -= dt * 0.9
+        self._orb_rings = [r for r in self._orb_rings if r[1] > 0]
+
         self.update()
 
     def paintEvent(self, _):
@@ -439,29 +496,8 @@ class HudCanvas(QWidget):
             p.drawLine(QPointF(bx, by), QPointF(bx + dx * bl, by))
             p.drawLine(QPointF(bx, by), QPointF(bx, by + dy * bl))
 
-        # face
-        if self._face_px:
-            fsz    = int(fw * 0.62 * self._scale)
-            scaled = self._face_px.scaled(
-                fsz, fsz,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            p.drawPixmap(int(cx - fsz / 2), int(cy - fsz / 2), scaled)
-        else:
-            orb_r = int(fw * 0.27 * self._scale)
-            oc    = (200, 0, 50) if self.muted else (0, 60, 110)
-            for i in range(8, 0, -1):
-                r2  = int(orb_r * i / 8)
-                frc = i / 8
-                a   = max(0, min(255, int(self._halo * 1.1 * frc)))
-                p.setBrush(QBrush(QColor(int(oc[0]*frc), int(oc[1]*frc), int(oc[2]*frc), a)))
-                p.setPen(Qt.PenStyle.NoPen)
-                p.drawEllipse(QRectF(cx - r2, cy - r2, r2 * 2, r2 * 2))
-            p.setPen(QPen(qcol(C.PRI, min(255, int(self._halo * 2))), 1))
-            p.setFont(QFont("Courier New", 13, QFont.Weight.Bold))
-            p.drawText(QRectF(cx - 80, cy - 14, 160, 28),
-                       Qt.AlignmentFlag.AlignCenter, "J.A.R.V.I.S")
+        # centre icon — animated plasma energy core (jarvis_orb)
+        self._draw_orb(p, cx, cy, fw)
 
         # particles
         for pt in self._particles:
@@ -507,6 +543,104 @@ class HudCanvas(QWidget):
                 hgt = int(3 + 2 * math.sin(self._tick * 0.09 + i * 0.6))
                 cl  = qcol(C.BORDER_B)
             p.fillRect(QRectF(wx0 + i * bw, wy + 20 - hgt, bw - 1, hgt), cl)
+
+    # ---- plasma energy core (jarvis_orb port) ---------------------------- #
+    def _orb_style(self) -> dict:
+        """Map the dashboard state to the orb's personality."""
+        if self.muted:
+            return dict(hue=348, sat=0.55, glow=0.16, pulse=1.0,
+                        spin=0.22, spark=0.10, ring_rate=0.0)
+        if self.speaking:
+            return dict(hue=196, sat=0.95, glow=0.85, pulse=4.2,
+                        spin=1.25, spark=0.85, ring_rate=0.0)
+        if self.state == "THINKING":
+            return dict(hue=205, sat=0.95, glow=0.66, pulse=2.4,
+                        spin=0.95, spark=0.50, ring_rate=0.0)
+        if self.state == "PROCESSING":
+            return dict(hue=205, sat=0.95, glow=0.70, pulse=2.8,
+                        spin=1.05, spark=0.58, ring_rate=0.0)
+        if self.state == "LISTENING":
+            return dict(hue=192, sat=0.95, glow=0.62, pulse=1.6,
+                        spin=0.55, spark=0.34, ring_rate=1.4)
+        return dict(hue=200, sat=0.92, glow=0.45, pulse=1.1,
+                    spin=0.35, spark=0.18, ring_rate=0.0)
+
+    def _radial(self, p, cx, cy, r, color, alpha):
+        """Additive soft radial-gradient disc (halo / core / hot centre)."""
+        if r <= 1:
+            return
+        g  = QRadialGradient(cx, cy, r)
+        c0 = QColor(color); c0.setAlpha(max(0, min(255, int(alpha))))
+        cm = QColor(color); cm.setAlpha(max(0, min(255, int(alpha * 0.35))))
+        c1 = QColor(color); c1.setAlpha(0)
+        g.setColorAt(0.0, c0); g.setColorAt(0.45, cm); g.setColorAt(1.0, c1)
+        p.setBrush(QBrush(g)); p.setPen(Qt.PenStyle.NoPen)
+        p.drawEllipse(QRectF(cx - r, cy - r, r * 2, r * 2))
+
+    def _draw_orb(self, p, cx, cy, fw):
+        st     = self._orb_st
+        amp    = self._orb_amp
+        breath = math.sin(self._orb_t * st["pulse"]) * 0.5 + 0.5
+        pulse  = 0.04 + breath * 0.06 + amp * 0.22
+        glow   = st["glow"] + amp * 0.4 + breath * 0.08
+        hue, sat = st["hue"], st["sat"]
+        base_r = fw * 0.18                 # tuned: framed by the inner arc ring
+        sr     = base_r * (1 + pulse)
+        scale  = fw / 520.0
+
+        p.save()
+        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Plus)
+        p.setPen(Qt.PenStyle.NoPen)
+
+        # atmospheric halo
+        self._radial(p, cx, cy, base_r * (2.0 + pulse * 1.2),
+                     _hsl(hue, sat, 0.55), int(40 + glow * 120))
+
+        # listening ripples (subtle, hug the core)
+        for prog, a in self._orb_rings:
+            rr  = base_r * (1.0 + prog * 1.1)
+            col = _hsl(hue + 8, 0.9, 0.6, int(110 * max(0.0, min(1.0, a))))
+            p.setPen(QPen(col, 2)); p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawEllipse(QRectF(cx - rr, cy - rr, rr * 2, rr * 2))
+        p.setPen(Qt.PenStyle.NoPen)
+
+        # plasma shell fragments
+        spark = st["spark"] + amp * 0.5
+        cosb, sinb = math.cos(self._orb_spin), math.sin(self._orb_spin)
+        tilt = math.sin(self._orb_t * 0.4) * 0.25
+        ct, stt = math.cos(tilt), math.sin(tilt)
+        for i, (x, y, z) in enumerate(self._orb_pts):
+            xr = x * cosb - z * sinb
+            zr = x * sinb + z * cosb
+            yr = y * ct - zr * stt
+            zr = y * stt + zr * ct
+            depth = (zr + 1) / 2
+            if depth < 0.15:
+                continue
+            px = cx + xr * sr
+            py = cy + yr * sr
+            flick  = 0.5 + 0.5 * math.sin(self._orb_t * (4 + 6 * spark)
+                                          + self._orb_flick[i])
+            bright = min(1.0, (0.25 + 0.75 * depth) * (0.4 + 0.6 * flick)
+                         * (0.7 + spark))
+            col    = _hsl(hue + flick * 16, sat, 0.45 + 0.45 * bright,
+                          int(60 + 190 * bright))
+            psize  = max(1, int((2 + depth * 4) * (0.8 + amp) * scale))
+            p.setBrush(col)
+            if self._orb_square[i]:
+                p.drawRoundedRect(QRectF(px - psize, py - psize,
+                                         psize * 2, psize * 2), 1, 1)
+            else:
+                p.drawEllipse(QPointF(px, py), psize, psize)
+
+        # bright inner core + hot centre
+        self._radial(p, cx, cy, sr * (0.95 + amp * 0.7),
+                     _hsl(hue - 6, max(0.0, sat - 0.25), 0.85),
+                     int(110 + glow * 90))
+        self._radial(p, cx, cy, sr * (0.42 + amp * 0.3),
+                     QColor(235, 245, 255), int(120 + glow * 90))
+
+        p.restore()
 
 class MetricBar(QWidget):
 
