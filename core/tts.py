@@ -172,6 +172,26 @@ def _normalize_uz_oq(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# English terms the Uzbek voice mispronounces.  Respell them phonetically so the
+# uz-UZ voice produces the English sound (acronyms are spelled out letter by
+# letter).  Applied only for the Uzbek voice; the on-screen text is unchanged.
+# A leading \b avoids mid-word hits; no trailing \b so Uzbek suffixes survive
+# (e.g. "timeframeni" -> "taymfreymni", "API'ni" -> "Ey Pi Ay'ni").
+# ---------------------------------------------------------------------------
+_EN_TERM_FIXES = (
+    (re.compile(r"\bAPI"), "Ey Pi Ay"),                        # A-P-I, letter by letter
+    (re.compile(r"\bSMM"), "Es Em Em"),                        # S-M-M, letter by letter
+    (re.compile(r"\btimeframe", re.IGNORECASE), "taymfreym"),  # English "time-frame"
+)
+
+
+def _normalize_en_terms(text: str) -> str:
+    for _rx, _repl in _EN_TERM_FIXES:
+        text = _rx.sub(_repl, text)
+    return text
+
+
+# ---------------------------------------------------------------------------
 # Engines
 # ---------------------------------------------------------------------------
 
@@ -194,6 +214,7 @@ class EdgeTTSEngine:
     async def _synth(self, text: str) -> bytes:
         import edge_tts
         if self.voice.lower().startswith("uz"):
+            text = _normalize_en_terms(text)   # timeframe/API/SMM -> English pronunciation
             text = _normalize_uz_oq(text)      # oʻ/gʻ -> U+02BB so Sardor says them right
         comm = edge_tts.Communicate(text, self.voice, rate=self.rate)
         buf  = bytearray()
