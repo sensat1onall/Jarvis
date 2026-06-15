@@ -478,7 +478,9 @@ def _stream_openai(
     # (connect, read) — fail a stalled/jittery connection in ~45s instead of
     # 120s so a retry can recover quickly.  gpt-4o-mini's first token is <2s.
     _to       = (10, 45)
-    _MAX_TRIES = 3
+    # 4 tries with 0.8/1.6/2.4 s backoff (~4.8 s window) rides out a brief network
+    # blip so a command isn't lost; a real outage still surfaces in well under a min.
+    _MAX_TRIES = 4
     last_err   = None
 
     for _attempt in range(1, _MAX_TRIES + 1):
@@ -590,9 +592,9 @@ def _stream_openai(
             continue
 
     if isinstance(last_err, requests.exceptions.Timeout):
-        raise RuntimeError("LLM stream timed out after 3 tries — connection is slow/unstable.")
+        raise RuntimeError(f"LLM stream timed out after {_MAX_TRIES} tries — connection is slow/unstable.")
     raise RuntimeError(
-        f"Cannot reach the LLM server at {url} after 3 tries — network/connection issue "
+        f"Cannot reach the LLM server at {url} after {_MAX_TRIES} tries — network/connection issue "
         "(the API key is valid). Check your internet connection."
     )
 
