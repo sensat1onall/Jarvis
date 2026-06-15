@@ -234,15 +234,18 @@ TOOL_DECLARATIONS = [
             "E.g. 'open gold 15m and analyze with trend lines' → action=analyze, symbol=gold, value=15m, "
             "strategy=trend. Other actions: 'open' (open chart only, new tab), 'timeframe', "
             "'indicator' (ADD a study, name=RSI/MACD/SAR…), 'remove_indicator' (DELETE a study, "
-            "name=RSI or name=all), 'draw' (manual single tool), 'read'. To SWAP indicators "
-            "(e.g. 'delete RSI and add SAR') call remove_indicator name=RSI then indicator name=SAR."
+            "name=RSI or name=all), 'draw' (manual single tool), 'clear' (ERASE ALL drawings/analysis "
+            "on the current chart), 'read'. To SWAP indicators (e.g. 'delete RSI and add SAR') call "
+            "remove_indicator name=RSI then indicator name=SAR. A multi-part request like 'clear the "
+            "drawings, switch to 1h and analyze again' = THREE calls in one turn: clear, then timeframe "
+            "value=1h, then analyze strategy=trend (omit symbol to re-analyze the current chart in place)."
         ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "action":   {"type": "STRING", "description": "analyze | open | timeframe | indicator | remove_indicator | draw | read"},
+                "action":   {"type": "STRING", "description": "analyze | open | timeframe | indicator | remove_indicator | draw | clear | read"},
                 "symbol":   {"type": "STRING", "description": "Chart symbol: gold/XAUUSD, bitcoin/BTCUSD, EURUSD, ethereum…"},
-                "strategy": {"type": "STRING", "description": "For analyze: 'trend' (trend lines) | 'sr' (support/resistance zones)"},
+                "strategy": {"type": "STRING", "description": "For analyze: 'trend' (trend lines) | 'sr' (support/resistance zones) | 'both' (draws BOTH S/R + trend on ONE chart in a single call). Use 'both' whenever the user wants more than one structure together — NEVER make two separate analyze calls (each opens a new tab)."},
                 "value":    {"type": "STRING", "description": "Timeframe: 1m,5m,15m,30m,1h,4h,1D,1W"},
                 "tool":     {"type": "STRING", "description": "For manual draw: trend | level | fib | vline"},
                 "name":     {"type": "STRING", "description": "Indicator name for indicator/remove_indicator: RSI, MACD, SAR, Bollinger Bands… (or 'all' to remove every study)"},
@@ -1487,7 +1490,10 @@ class JarvisLocal:
 
             try:
                 for event in call_llm_stream(messages, OLLAMA_TOOLS):
-                    if self._stop_flag.is_set():     # 'Jarvis Stop' mid-stream
+                    # A 'stop' only halts an in-progress SPOKEN reply. A tool-only
+                    # stream (no sentences yet) must run to completion so the user's
+                    # action isn't lost — keep reading until the tool calls arrive.
+                    if self._stop_flag.is_set() and _streamed:
                         break
                     if event["type"] == "sentence":
                         # ── Overlap TTS with LLM generation ─────────────────
@@ -1516,8 +1522,16 @@ class JarvisLocal:
                 self.speak_error("LLM", e)
                 return
 
-            if self._stop_flag.is_set():     # interrupted — abort this turn
-                return
+            if self._stop_flag.is_set():
+                # A 'stop' (Esc, barge-in, or — most commonly — pressing the talk
+                # button again because a silent tool turn seemed frozen) means "stop
+                # talking". It must NOT silently discard an action the user asked for
+                # that produced no speech. Honour the stop only if we already spoke a
+                # reply; otherwise clear the stray flag and run the tool call(s) so
+                # the command isn't lost.
+                if _streamed or not final_tool_calls:
+                    return
+                self._stop_flag.clear()
 
             # ── No tool calls: pure conversational reply ─────────────────────
             if not final_tool_calls:
@@ -1567,6 +1581,15 @@ class JarvisLocal:
                 if not _streamed:
                     self.speak(final_content)
                 break
+
+            # Slow tools (chart analysis, web search, vision) run silently for
+            # several seconds. With no audio the user assumes it froze and presses
+            # the talk button again — so give a short spoken cue first, but only
+            # when the model emitted no text of its own.
+            if (not _streamed and _round == 0
+                    and any(tc.get("function", {}).get("name") in _NEEDS_LLM_ROUND
+                            for tc in final_tool_calls)):
+                self.speak("Bajaryapman.")
 
             # ── Execute tools ─────────────────────────────────────────────────
             all_silent    = True
@@ -1645,30 +1668,20 @@ class JarvisLocal:
     # ------------------------------------------------------------------
 
     def _listen_whisper(self) -> None:
-        """Mic loop with three modes:
-          • push-to-talk — while the button is held, capture raw audio (no VAD,
-            no wake word); transcribe + run on release.
-          • barge-in     — WHILE Jarvis is speaking, listen (louder threshold)
-            only for the 'Jarvis Stop' phrase and interrupt.
-          • idle         — VAD → STT → require the 'Jarvis' wake word, then run.
-        """
-        vad  = _VADBuffer()                                              # idle listening
-        bvad = _VADBuffer(speech_thresh=0.020, silence_thresh=0.012,     # barge-in: louder,
-                          silence_sec=0.5)                               # faster end-of-speech
-        q: queue.Queue = queue.Queue(maxsize=200)
+        """Push-to-talk ONLY. The mic stays idle until the talk button is held;
+        while held the callback captures raw audio, and _ptt_stop transcribes and
+        runs it on release (no wake word — holding the button is explicit intent).
 
+        There is deliberately NO passive/idle listening: it used to send every
+        ambient sound to the cloud STT (wasting tokens) and its 'Jarvis Stop'
+        barge-in could trip on background noise and silently abort a real command.
+        To stop Jarvis mid-sentence, press the talk button (it interrupts) or Esc.
+        """
         def callback(indata, frames, time_info, status):
-            # Push-to-talk captures everything while held, ignoring VAD/mute.
+            # Capture ONLY while the talk button is held. Ignore everything else —
+            # no background audio is ever transcribed.
             if self._ptt_active:
                 self._ptt_buf.append(indata.copy())
-                return
-            if self.ui.muted:
-                return
-            # Feed the queue even while speaking, so 'Jarvis Stop' can be heard.
-            try:
-                q.put_nowait(indata.copy())
-            except queue.Full:
-                pass
 
         try:
             with sd.InputStream(
@@ -1678,45 +1691,11 @@ class JarvisLocal:
                 blocksize=BLOCK_SIZE,
                 callback=callback,
             ):
-                self.ui.write_log("SYS: Mic active — say 'Jarvis …' or hold the talk button.")
+                self.ui.write_log("SYS: Mic ready — hold the talk button to speak.")
+                # PTT capture happens in the callback and _ptt_stop does the
+                # transcription + dispatch; this thread just keeps the stream open.
                 while True:
-                    try:
-                        chunk = q.get(timeout=0.1)
-                    except queue.Empty:
-                        continue
-                    flat = chunk.flatten()
-
-                    if self._is_speaking():
-                        # Barge-in: only react to the stop phrase, louder threshold.
-                        audio = bvad.process(flat)
-                        if audio is not None:
-                            text = self._stt.transcribe(audio)
-                            if text.strip() and self._is_stop_command(text):
-                                self._interrupt()
-                        continue
-
-                    audio = vad.process(flat)
-                    if audio is None:
-                        continue
-                    text = self._stt.transcribe(audio)
-                    if not text.strip():
-                        continue
-                    cmd = self._strip_wake(text)
-                    if cmd is None and time.time() < self._await_reply_until:
-                        # Jarvis just asked a question — accept this utterance
-                        # as the answer without requiring the wake word.
-                        cmd = text.strip()
-                    if cmd is None:
-                        self.ui.write_log(f"SYS: (no wake word) {text[:48]}")
-                        if not self.ui.muted:
-                            self.ui.set_state("LISTENING")
-                        continue
-                    self._await_reply_until = 0.0
-                    if cmd == "":
-                        self.speak("Labbay?")        # heard only 'Jarvis'
-                        continue
-                    self.ui.set_state("THINKING")
-                    self._process_message(cmd)
+                    time.sleep(0.2)
         except Exception as e:
             print(f"[STT-Whisper] Mic error: {e}")
             traceback.print_exc()
